@@ -1,55 +1,25 @@
 #!/usr/bin/env python
-#import scipy
-#import scipy.fftpack
 import pylab
 import numpy
-#import wfdbtools
 from wfdbtools import rdsamp, rdann, plot_data
 from pprint import pprint
 from sys import exit
-#from scipy.linalg import lstsq
 from math import atan, log, pi
 from scipy import signal
 import anfft
-#from numpy import correlate, std, mean, ones
 
-record = '16265'
-outfile = open(record+".csv", "w")
+record = 's20011'
+records = []
 
-def kalman(z):
-	"""Apply kalman filter to z"""
-	# intial parameters
-	n_iter = len(z)
-	sz = (n_iter,) # size of array
-	Q = 1e-5 # process variance
-
-	# allocate space for arrays
-	xhat=numpy.zeros(sz)      # a posteri estimate of x
-	P=numpy.zeros(sz)         # a posteri error estimate
-	xhatminus=numpy.zeros(sz) # a priori estimate of x
-	Pminus=numpy.zeros(sz)    # a priori error estimate
-	K=numpy.zeros(sz)         # gain or blending factor
-
-	R = 0.1**16 # estimate of measurement variance, change to see effect
-
-	# intial guesses
-	xhat[0] = 0.0
-	P[0] = 1.0
-
-	for k in range(1,n_iter):
-		# time update
-		xhatminus[k] = xhat[k-1]
-		Pminus[k] = P[k-1]+Q
-
-		# measurement update
-		K[k] = Pminus[k]/( Pminus[k]+R )
-		xhat[k] = xhatminus[k]+K[k]*(z[k]-xhatminus[k])
-		P[k] = (1-K[k])*Pminus[k]
-	return xhat
+def write_csv():
+	outfile = open(record+".csv", "w")
+	for r in records:
+		line = "%s,%s,%s,%s,%s,%s\n" % record,r['time_from'],r['time_to'],r['std'],r['stn'],r['mean']
+	outfile.write(line)
+	outfile.close()
 
 def autocor(data):
-	print "autocorrelation"
-
+	print "Autocorrelation"
 	data_length = len(data)
 	in2 = numpy.zeros(data_length * 2)
 
@@ -58,50 +28,42 @@ def autocor(data):
 	# Do an array flipped convolution, which is a correlation.
 	cor = signal.fftconvolve(in2, data[::-1], mode='valid') 
 	cor = cor[len(cor)/2:]
-#	pylab.figure()
-#	pylab.plot(cor)
-#pylab.show()
-#exit(0)
 	return cor
 
-#corrfft = lambda x,y : pylab.irfft(pylab.rfft(x)*pylab.rfft(y[::-1]))
+def fft(x,width=20):
+	print "FFT"
+	arr = numpy.zeros(2**width)
+	arr[:len(x)] = x
+	F = abs(anfft.fft(arr))
+#	F = abs(pylab.fftpack.fft(arr))
+	f = pylab.fftfreq(len(arr), 1/info['samp_freq'])
+	F = F[:len(F)/2]
+	f = f[:len(f)/2]
+	return F, f
 
-#	cor = pylab.correlate(v,v,mode='full')
-#	cor = cor[len(cor)/2:]
-#	cor = xhat
-	#print "cor_len=",len(cor)
-#	pylab.figure()
-#	pylab.plot(cor,'r',label='correlation2')
+def cut_freq(s,f,fmin=0.003,fmax=0.04):
+	print "Cutting freqs %s - %s" % (fmin, fmax)
+	imin = f.searchsorted(fmin)
+	imax = f.searchsorted(fmax)
+	return s[imin:imax], f[imin:imax]
 
+def betta(x,y):
+	A = pylab.vstack([x, pylab.ones(len(x))]).T
+	a, b = pylab.lstsq(A, y)[0]
+	_b = -a
+	print "betta = %s" % (_b, )	
+	y = a*x+b
+	return _b
 
-def cut_freq(spower,freqs,freq_from=0.003,freq_to=0.04):
-	print "Cutting freqs %s - %s" % (freq_from, freq_to)
-	f_min, f_max = freqs.min(), freqs.min()
-	i_min, i_max, i = 0,0,0
-	for f in freqs:
-		if f <= freq_from:
-			f_min = f
-			i_min = i
-		if f <= freq_to:
-			f_max = f
-			i_max = i
-		if f > freq_to:
-			break
-		i+=1
-
-	#print "freqs " ,f_min, " - ", f_max
-	#fmin = next(x for x in freqs if x >= 0.003)
-	#fmax = next(x for x in freqs if x >= 0.04)
-
-	spower = spower[i_min:i_max]
-	#print F[:10]
-	freqs = freqs[i_min:i_max] # right freqs only
-	#print freqs[:10]
-
-	#print len(v), len(F)
-	#pprint(F[:10])
-	#pprint(freqs[:10])
-	return spower, freqs
+def fig(in1,in2=None,label="",show=False):	
+	pylab.figure()
+	if in2 is None:
+		pylab.plot(in1,label=label)
+	else:
+		pylab.plot(in1,in2,label=label)
+	if show:
+		pylab.show()
+		exit(0)
 
 # Read in the data from 0 to 10 seconds
 # rdsamp(record, start=0, end=-1, interval=-1)
@@ -124,93 +86,43 @@ w = 1000 # window last RR
 print "RR count", len(ann)
 
 while c+w < len(ann):
+	r = {}
 	# get 10 RRs
 	print "RR ",c," - ",c+w
 	chunk_first = ann[c][0] # get sample number of first RR interval
 	chunk_last = ann[c+w][0] # get sample number of last RR interval
 	#time_interval = (chunk_last-chunk_first)/info['samp_freq']
+	r['time_from'] = data[chunk_first,1]
+	r['time_to'] = data[chunk_last,1]
 	print "interval ", data[chunk_first,1], " - ", data[chunk_last,1], " = ", (chunk_last-chunk_first)/info['samp_freq'], " s"
 
 	t = data[chunk_first:chunk_last,1] # time array of target window
 	v = data[chunk_first:chunk_last,2] # data value of target window
 
-#	pylab.figure()
-#	pylab.plot(t,v)
+	#fig(t,v,show=True)
+	r['std'] = pylab.std(v)
+	r['mean'] = pylab.mean(v)
+	r['stn'] = r['std']/r['mean']
 
-	sigma = pylab.std(v)
-	v_mean = pylab.mean(v)
-	sdn = sigma/v_mean
-	print "std=",sigma
-	print "sdn=", sdn
-	print "mean_RR=",v_mean
-
-
-#	print "correlation"
-#	cor = pylab.correlate(v,v,mode='full')
-#	cor = cor[len(cor)/2:]
-	#print "cor_len=",len(cor)
-#	pylab.figure()
-#	pylab.plot(cor,'r+',label='correlation')
-
-#	print "fft"
-#	F = abs(pylab.fftpack.rfft(cor,len(cor)*10))
-#	freqs = pylab.fftfreq(len(cor)*10, 1/info['samp_freq'])
-#	pylab.figure()
-#	pylab.plot(F,'k+',label='fft2')
-
-	print "len v = %s" % (len(v),)
 	cor = autocor(v)
 
-	print "fft"
-	arr = numpy.zeros(2**20)
-	arr[:len(cor)] = cor
-	F = abs(anfft.fft(arr))
-#	F = abs(pylab.fftpack.fft(cor, len(cor)*2**3))
-#	F = abs(pylab.fftpack.fft(arr))
-#	F = F[len(F)/2+1:]
-	freqs = pylab.fftfreq(len(arr), 1/info['samp_freq'])
-#	freqs = freqs[len(freqs)/2:]
-	print "len_f=",len(freqs),"len_F=",len(F)
-#	pylab.figure()
-#	pylab.plot(freqs,F,'k',label='fft22')
-#	pylab.show()
-#	exit(0)
 
 
-	F, freqs = cut_freq(F,freqs)
-#	F2, f2 = cut_freq(F,freqs,0,1)
-#	pylab.figure()
-#	pylab.plot(f2,F2,'k')
+	Ff, ff = fft(cor)
+	Fc, fc = cut_freq(Ff,ff)
 
-	F = pylab.log(F)
-	freqs = pylab.log(freqs)
+	Fc = pylab.log(Fc)
+	fc = pylab.log(fc)
+#	fig(fc,Fc,show=True)
 
-#	pylab.figure()
-#        pylab.plot(freqs, F)
-#	pylab.show()
-#	exit(0)
-
-	A = pylab.vstack([freqs, pylab.ones(len(freqs))]).T
-	#print "A=",A
-	a, b = pylab.lstsq(A, F)[0]
-	#print "a=",a," b=",b
-	betta = -a
-	print "betta=",betta
-	#print "alpha=",atan(-a)/pi*180
+	r['betta'] = betta(fc,Fc)
 	
-	y = a*freqs+b
-#	pylab.plot(freqs, y, 'r', label='Fitted line')
+	pprint(r)
 
-#	pylab.show()
-#	exit(0)
-	
-	ostr=record+","+str(data[chunk_first,1])+","+str(data[chunk_last,1])+","+str(betta)+","+str(sigma)+","+str(sdn)+","+str(v_mean)+"\n"
-	print ostr
-	outfile.write(ostr)
-	
+	records.append(r)
+
 	c +=w 
-#	break
 
 
-outfile.close()
+write_csv()
 
