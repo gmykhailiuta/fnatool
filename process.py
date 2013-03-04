@@ -12,7 +12,7 @@ def write_csv(records,record):
 	outfile = open(record+".csv", "w")
 	for r in records:
 		line = "%s,%s,%s,%s,%s,%s\n" % (record,r['time_from'],r['time_to'],r['std'],r['stn'],r['mean'])
-	outfile.write(line)
+		outfile.write(line)
 	outfile.close()
 
 def autocor(data):
