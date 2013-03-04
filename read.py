@@ -9,9 +9,10 @@ from pprint import pprint
 from sys import exit
 #from scipy.linalg import lstsq
 from math import atan, log, pi
+from scipy import signal
 #from numpy import correlate, std, mean, ones
 
-record = 's20081'
+record = 's20011'
 #outfile = open(record+".csv", "a+")
 
 def kalman(z):
@@ -45,20 +46,45 @@ def kalman(z):
 		P[k] = (1-K[k])*Pminus[k]
 	return xhat
 
-def cut_freq(spower,freqs,freq_from=0.003,freq_to=0.03):		
+def autocor(data):
+	print "autocorrelation"
+
+	data_length = len(data)
+	in2 = numpy.zeros(data_length * 2)
+
+	in2[data_length/2:data_length/2+data_length] = data # This works for data_length being even
+
+	# Do an array flipped convolution, which is a correlation.
+	cor = signal.fftconvolve(in2, data[::-1], mode='valid') 
+	cor = cor[len(cor)/2:]
+#	pylab.figure()
+#	pylab.plot(cor)
+#pylab.show()
+#exit(0)
+	return cor
+
+#corrfft = lambda x,y : pylab.irfft(pylab.rfft(x)*pylab.rfft(y[::-1]))
+
+#	cor = pylab.correlate(v,v,mode='full')
+#	cor = cor[len(cor)/2:]
+#	cor = xhat
+	#print "cor_len=",len(cor)
+#	pylab.figure()
+#	pylab.plot(cor,'r',label='correlation2')
+
+
+def cut_freq(spower,freqs,freq_from=0.003,freq_to=0.04):
 	print "Cutting freqs %s - %s" % (freq_from, freq_to)
-	f_min = freqs.min()
-	f_max = freqs.min()
-	i_min = 0
-	i_max = 0
+	f_min, f_max = freqs.min(), freqs.min()
+	i_min, i_max, i = 0,0,0
 	for f in freqs:
-		if f <= 0.003:
+		if f <= freq_from:
 			f_min = f
 			i_min = i
-		if f <= 0.03:
+		if f <= freq_to:
 			f_max = f
 			i_max = i
-		if f > 0.03:
+		if f > freq_to:
 			break
 		i+=1
 
@@ -118,15 +144,6 @@ while c+w < len(ann):
 	print "mean_RR=",v_mean
 
 
-#	pylab.figure()
-#	pylab.plot(z,'k+',label='noisy measurements')
-#	pylab.plot(xhat,'b-',label='a posteri estimate')
-#	pylab.axhline(x,color='g',label='truth value')
-#	pylab.legend()
-#	pylab.xlabel('Iteration')
-#	pylab.ylabel('Voltage')
-	
-
 #	print "correlation"
 #	cor = pylab.correlate(v,v,mode='full')
 #	cor = cor[len(cor)/2:]
@@ -140,53 +157,33 @@ while c+w < len(ann):
 #	pylab.figure()
 #	pylab.plot(F,'k+',label='fft2')
 
-	print "correlation"
-
-	data_length = len(v)
-
-	from scipy import signal
-
-	b2 = numpy.zeros(data_length * 2)
-
-	b2[data_length/2:data_length/2+data_length] = v # This works for data_length being even
-
-	# Do an array flipped convolution, which is a correlation.
-	cor = signal.fftconvolve(b2, v[::-1], mode='valid') 
-	cor = cor[len(cor)/2:]
-
-#	corrfft = lambda x,y : pylab.irfft(pylab.rfft(x)*pylab.rfft(y[::-1]))
-
-#	cor = pylab.correlate(v,v,mode='full')
-#	cor = cor[len(cor)/2:]
-#	cor = xhat
-	#print "cor_len=",len(cor)
-#	pylab.figure()
-#	pylab.plot(cor,'r+',label='correlation2')
+	print "len v = %s" % (len(v),)
+	cor = autocor(v)
 
 	print "fft"
-#	F = abs(pylab.fftpack.rfft(cor,len(cor)))
-	F = abs(pylab.fftpack.rfft(cor,len(cor)))
-	F = F[len(F)/2:]
-#	cf2 = abs(corrfft(v,v))
-#	freqs = pylab.fftfreq(len(v), 1/info['samp_freq'])
-	freqs = pylab.fftfreq(len(cor)/2+1, 1/info['samp_freq'])
-	freqs = freqs[len(freqs)/2:]
+	F = abs(pylab.fftpack.fft(cor, len(cor)*2**3))
+#	F = F[len(F)/2+1:]
+	freqs = pylab.fftfreq(len(cor)*2**3, 1/info['samp_freq'])
+#	freqs = freqs[len(freqs)/2:]
 	print "len_f=",len(freqs),"len_F=",len(F)
-	pylab.figure()
-	pylab.plot(freqs,F,'k+',label='fft22')
-	pylab.show()
-	exit(0)
+#	pylab.figure()
+#	pylab.plot(freqs,F,'k',label='fft22')
+#	pylab.show()
+#	exit(0)
 
 
-#	cut_freq(F,freqs)
+	F, freqs = cut_freq(F,freqs)
+#	F2, f2 = cut_freq(F,freqs,0,1)
+#	pylab.figure()
+#	pylab.plot(f2,F2,'k')
 
 	F = pylab.log(F)
 	freqs = pylab.log(freqs)
 
-	pylab.figure()
-        pylab.plot(freqs, F)
-	pylab.show()
-	exit(0)
+#	pylab.figure()
+#        pylab.plot(freqs, F)
+#	pylab.show()
+#	exit(0)
 
 	A = pylab.vstack([freqs, pylab.ones(len(freqs))]).T
 	#print "A=",A
@@ -197,10 +194,10 @@ while c+w < len(ann):
 	#print "alpha=",atan(-a)/pi*180
 	
 	y = a*freqs+b
-	pylab.plot(freqs, y, 'r', label='Fitted line')
+#	pylab.plot(freqs, y, 'r', label='Fitted line')
 
-	pylab.show()
-	exit(0)
+#	pylab.show()
+#	exit(0)
 	
 	ostr=record+","+str(data[chunk_first,1])+","+str(data[chunk_last,1])+","+str(betta)+","+str(sigma)+","+str(sdn)+","+str(v_mean)+"\n"
 	print ostr
@@ -212,29 +209,3 @@ while c+w < len(ann):
 
 outfile.close()
 
-def draw():
-
-	#pprint(freqs[:10])
-
-	fig = pylab.figure(2)
-	#fig.add_subplot(211)
-	#ax1.bar(1280, 128, color='red', edgecolor='black', hatch="o")
-	sp1 = pylab.subplot(211)
-	sp1.set_ylabel('Signal, mV')
-	sp1.set_xlabel('Time, s')
-	sp1.plot(t, v)
-	sp1.plot(ann[c:c+w, 1], data[ann_x[c:c+w], 2], 'xr')
-	#pylab.subplot(212)
-	sp2 = fig.add_subplot(212)
-	sp2.set_ylabel('ln(F)')
-	sp2.set_xlabel('ln(freq)')
-	#ax2.bar(1280, 128, color='red', edgecolor='black', hatch="o")
-	#ax.plot(freqs,20*scipy.log10(F),',')
-	#pylab.plot(freqs,20*scipy.log10(F),',')
-	sp2.plot(freqs,F,'.')
-	y = a*freqs+b
-	pylab.plot(freqs, y, 'r', label='Fitted line')
-
-	#ax.set_xscale('log')
-	#ax.set_yscale('log')
-	pylab.show()
