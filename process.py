@@ -11,7 +11,7 @@ import anfft
 def write_csv(records,record):
 	outfile = open(record+".csv", "w")
 	for r in records:
-		line = "%s,%s,%s,%s,%s,%s\n" % (record,r['time_from'],r['time_to'],r['std'],r['stn'],r['mean'])
+		line = "%s,%s,%s,%s,%s,%s,%s\n" % (record,r['time_from'],r['time_to'],r['betta'],r['std'],r['stn'],r['mean'])
 		outfile.write(line)
 	outfile.close()
 
@@ -63,7 +63,7 @@ def fig(in1,in2=None,label="",show=False):
 		exit(0)
 
 def process(record, write_file=True):
-	records = []
+	rr = []
 
 	# Read in the data from 0 to 10 seconds
 	# rdsamp(record, start=0, end=-1, interval=-1)
@@ -121,10 +121,11 @@ def process(record, write_file=True):
 		r['betta'] = betta(fc,Fc)
 	
 		pprint(r)
-		records.append(r)
+		rr.append(r)
 		c +=w
 
-	write_csv(records,record)
+	if write_file:
+		write_csv(rr,record)
 
 if __name__ == '__main__':
-	process('s20011')
+	process('s20051')
