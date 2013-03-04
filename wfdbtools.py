@@ -477,8 +477,14 @@ def _read_data(record, start, end, info):
     data = _arr_to_data(arr)
 
     # adjust zerovalue and gain
-    data[:, 2] = (data[:, 2] - info['zero_values'][0]) / info['gains'][0]
-    data[:, 3] = (data[:, 3] - info['zero_values'][1]) / info['gains'][1]
+    if info['gains'][0] > 0:
+        data[:, 2] = (data[:, 2] - info['zero_values'][0]) / info['gains'][0]
+    else:
+        data[:, 2] = data[:, 2] - info['zero_values'][0]
+    if info['gains'][1] > 0:
+        data[:, 3] = (data[:, 3] - info['zero_values'][1]) / info['gains'][1]
+    else:
+        data[:, 3] = data[:, 3] - info['zero_values'][1]
 
     # time columns
     data[:, 0] = numpy.arange(start, end)  # elapsed time in samples

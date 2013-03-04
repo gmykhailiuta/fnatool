@@ -10,10 +10,11 @@ from sys import exit
 #from scipy.linalg import lstsq
 from math import atan, log, pi
 from scipy import signal
+import anfft
 #from numpy import correlate, std, mean, ones
 
-record = 's20011'
-#outfile = open(record+".csv", "a+")
+record = '16265'
+outfile = open(record+".csv", "w")
 
 def kalman(z):
 	"""Apply kalman filter to z"""
@@ -104,13 +105,13 @@ def cut_freq(spower,freqs,freq_from=0.003,freq_to=0.04):
 
 # Read in the data from 0 to 10 seconds
 # rdsamp(record, start=0, end=-1, interval=-1)
-data, info = rdsamp(record, 0, 1000)
+data, info = rdsamp(record, 0)
 pprint(info)
 
 print "total time ", int(info['samp_count'])/int(info['samp_freq'])
 
 # rdann(record, annotator, start=0, end=-1, types=[])
-ann = rdann(record, 'atr', 0, 1000)
+ann = rdann(record, 'atr', 0)
 # annotation time in samples from start
 ann_x = (ann[:, 0] - data[0, 0]).astype('int')
 
@@ -161,9 +162,13 @@ while c+w < len(ann):
 	cor = autocor(v)
 
 	print "fft"
-	F = abs(pylab.fftpack.fft(cor, len(cor)*2**3))
+	arr = numpy.zeros(2**20)
+	arr[:len(cor)] = cor
+	F = abs(anfft.fft(arr))
+#	F = abs(pylab.fftpack.fft(cor, len(cor)*2**3))
+#	F = abs(pylab.fftpack.fft(arr))
 #	F = F[len(F)/2+1:]
-	freqs = pylab.fftfreq(len(cor)*2**3, 1/info['samp_freq'])
+	freqs = pylab.fftfreq(len(arr), 1/info['samp_freq'])
 #	freqs = freqs[len(freqs)/2:]
 	print "len_f=",len(freqs),"len_F=",len(F)
 #	pylab.figure()
