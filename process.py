@@ -4,7 +4,7 @@ import numpy
 from wfdbtools import rdsamp, rdann, plot_data
 from pprint import pprint
 from sys import exit
-from math import atan, log, pi
+from math import log
 from scipy import signal
 import anfft
 
@@ -27,9 +27,9 @@ def autocor(data):
 	cor = cor[len(cor)/2:]
 	return cor
 
-def fft(x,samp_freq=250,width=20):
+def fft(x,samp_freq=250):
 	print "FFT"
-	arr = numpy.zeros(2**width)
+	arr = numpy.zeros(2**(round(log(len(x),2))+3))
 	arr[:len(x)] = x
 	F = abs(anfft.fft(arr))
 #	F = abs(pylab.fftpack.fft(arr))
@@ -50,6 +50,7 @@ def betta(x,y):
 	_b = -a
 	print "betta = %s" % (_b, )	
 	y = a*x+b
+#	fig(x,y)
 	return _b
 
 def fig(in1,in2=None,label="",show=False):	
@@ -99,7 +100,7 @@ def process(record, write_file=True):
 		t = data[chunk_first:chunk_last,1] # time array of target window
 		v = data[chunk_first:chunk_last,2] # data value of target window
 
-#		fig(t,v)
+#		fig(t,v,show=True)
 		r['std'] = pylab.std(v)
 		r['mean'] = pylab.mean(v)
 		r['stn'] = r['std']/r['mean']
@@ -116,9 +117,10 @@ def process(record, write_file=True):
 
 		Fc = pylab.log(Fc)
 		fc = pylab.log(fc)
-#	fig(fc,Fc,show=True)
+#		fig(fc,Fc,show=False)
 
 		r['betta'] = betta(fc,Fc)
+#		fig(fc,Fc,show=True)
 	
 		pprint(r)
 		rr.append(r)
@@ -128,4 +130,4 @@ def process(record, write_file=True):
 		write_csv(rr,record)
 
 if __name__ == '__main__':
-	process('s20051')
+	process('s20171')
