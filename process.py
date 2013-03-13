@@ -4,7 +4,7 @@ import numpy
 from wfdbtools import rdsamp, rdann, plot_data
 from pprint import pprint
 from sys import exit
-from math import log
+#from math import log
 from scipy import signal
 import anfft
 
@@ -29,7 +29,7 @@ def autocor(data):
 
 def fft(x,samp_freq=250):
 	print "FFT"
-	arr = numpy.zeros(2**(round(log(len(x),2))+3))
+	arr = numpy.zeros(2**(round(pylab.log2(len(x)))+3))
 	arr[:len(x)] = x
 	F = abs(anfft.fft(arr))
 #	F = abs(pylab.fftpack.fft(arr))
@@ -50,7 +50,7 @@ def betta(x,y):
 	_b = -a
 	print "betta = %s" % (_b, )	
 	y = a*x+b
-#	fig(x,y)
+#	pylab.plot(x,y,'r')
 	return _b
 
 def fig(in1,in2=None,label="",show=False):	
@@ -111,16 +111,18 @@ def process(record, write_file=True):
 #		fig(cD, show=True)
 
 		cor = autocor(v)
-
+		
 		Ff, ff = fft(cor, info['samp_freq'])
 		Fc, fc = cut_freq(Ff,ff)
 
-		Fc = pylab.log(Fc)
-		fc = pylab.log(fc)
+		Fc = pylab.log10(Fc)
+		fc = pylab.log10(fc)
 #		fig(fc,Fc,show=False)
 
 		r['betta'] = betta(fc,Fc)
-#		fig(fc,Fc,show=True)
+#		pylab.show()
+#		exit(0)
+		
 	
 		pprint(r)
 		rr.append(r)
@@ -130,4 +132,4 @@ def process(record, write_file=True):
 		write_csv(rr,record)
 
 if __name__ == '__main__':
-	process('s20171')
+	process('s20151')
