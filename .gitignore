@@ -2,5 +2,8 @@
 *.dat
 *.hea
 *.atr
+*.ari
+*.qrs
 *.csv
 *.*~
+*.png
