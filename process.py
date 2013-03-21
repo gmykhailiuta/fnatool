@@ -54,7 +54,7 @@ def aprox(x,y):
 #	return -a
 
 def fig(in1,in2=None,label="",show=False):	
-	pylab.figure()
+	pylab.figure(figsize=(6, 6), facecolor='white')
 	if in2 is None:
 		pylab.plot(in1,label=label)
 	else:
@@ -96,6 +96,7 @@ def draw_flicker(f,F,y, fname):
 	pylab.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
 
 def process(record, end=-1):
+	print "Processing %s" % (record,)
 	
 
 	# Read in the data from 0 to 10 seconds
@@ -113,28 +114,29 @@ def process(record, end=-1):
 
 
 #ann_y = v[ann_y,2]
-	plot_data(data, info, ann)
+	#plot_data(data, info, ann)
 
-	c = 0 # window first RR
-	w = 500 # window last RR
+	w = 1000 # window last RR
 
 	print "RR count", len(ann)
 
-	for chanel in range(1):
+	for channel in range(2):
+		print "Channel %s" % (channel,)
+		c = 0 # window first RR
 		rr = []
 		while c+w < len(ann):
 			r = {}
 		# get 10 RRs
-			print "RR ",c," - ",c+w
+			print "RR %s - %s / %s" % (c,c+w,len(ann))
 			chunk_first = ann[c][0] # get sample number of first RR interval
 			chunk_last = ann[c+w][0] # get sample number of last RR interval
 		#time_interval = (chunk_last-chunk_first)/info['samp_freq']
 			r['time_from'] = data[chunk_first,1]
 			r['time_to'] = data[chunk_last,1]
-			print "interval ", r['time_from'], " - ", r['time_to'], " = ", (chunk_last-chunk_first)/info['samp_freq'], " s"
+			#print "interval ", r['time_from'], " - ", r['time_to'], " = ", (chunk_last-chunk_first)/info['samp_freq'], " s"
 
 			t = data[chunk_first:chunk_last,1] # time array of target window
-			v = data[chunk_first:chunk_last,chanel+2] # data value of target window
+			v = data[chunk_first:chunk_last,channel+2] # data value of target window
 
 	#		fig(t,v,show=True)
 			r['std'] = pylab.std(v)
@@ -182,7 +184,8 @@ def process(record, end=-1):
 
 			_a,_b = aprox(fc,Fc)
 			r['beta'] = -_a
-			#draw_flicker(fc,Fc,_a*fc+_b,"%s_c%s_flicker_i%s.png" % (record, chanel, int(c/w)))
+			#draw_flicker(fc,Fc,_a*fc+_b,"%s_c%s_flicker_i%s.png" % (record, channel, int(c/w)))
+			#exit(0)
 
 			#pylab.show()
 	#exit(0)
@@ -192,10 +195,10 @@ def process(record, end=-1):
 			rr.append(r)
 			c +=w
 
-		draw_std(rr, "%s_c%s_std.png" % (record, chanel))
-		draw_sdn(rr, "%s_c%s_sdn.png" % (record, chanel))
+		draw_std(rr, "%s_c%s_std.png" % (record, channel))
+		draw_sdn(rr, "%s_c%s_sdn.png" % (record, channel))
 
-		#write_csv(rr,record+"_c"+chanel+".csv")    
+		#write_csv(rr,record+"_c"+channel+".csv")    
 		del rr
 	del data, info, ann, ann_x	
 
@@ -203,5 +206,5 @@ def process(record, end=-1):
 
 
 if __name__ == '__main__':
-	record = '100'
+	record = 's20161'
 	process(record)
