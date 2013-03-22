@@ -11,7 +11,10 @@ import os
 for f in os.listdir('.'):
     path = os.path.splitext(f)
     if path[1] == '.hea' and not os.path.exists("%s_c0_sdn.png" % path[0]):
-        process(path[0])
+        try:
+            process(path[0])
+        except:
+            print "FAILED"
 
 #for f in files:
 #    process(f)
