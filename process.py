@@ -81,8 +81,10 @@ def draw_std(rr, fname):
 	y = [y['beta'] for y in rr]
 	pylab.figure(figsize=(6, 6), facecolor='white')
 	pylab.plot(x,y,'.r')
-	pylab.axhline(y=1,color='b')
 	pylab.ylim(0,2)
+	pylab.xlim(0,140)
+	pylab.axhline(y=1,color='b')
+	pylab.axvline(x=70,color='b')
 	pylab.xlabel(r"$\sigma$")
 	pylab.ylabel(r"$\beta$")
 	pylab.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
@@ -108,7 +110,7 @@ def process(record, end=-1):
 	print "total time ", int(info['samp_count'])/int(info['samp_freq'])
 
 # rdann(record, annotator, start=0, end=-1, types=[])
-	ann = rdann(record, 'atr', 0, end)
+	ann = rdann(record, 'ecg', 0, end)
 # annotation time in samples from start
 	ann_x = (ann[:, 0] - data[0, 0]).astype('int')
 
@@ -206,5 +208,5 @@ def process(record, end=-1):
 
 
 if __name__ == '__main__':
-	record = 's20161'
+	record = 'chf01'
 	process(record)

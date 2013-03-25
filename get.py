@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import urllib2
+import os
 
-fpath = 'http://www.physionet.org/physiobank/database/ltstdb/'
+fpath = 'http://www.physionet.org/physiobank/database/chfdb/'
 
 def get_file(fpath,fname):
     try:
@@ -14,12 +15,19 @@ def get_file(fpath,fname):
         else:
             print "File %s not found (return code %s)" % (fpath+fname, u.code)
     except urllib2.HTTPError:
-        #print "Can't open %s" % (fpath+fname,)                                                                                                              
+        print "Can't open %s" % (fpath+fname,)                                                                                                              
 	pass
 
-for a in range(2,4):
-    for b in range(41,81):
-        for c in range(1,5):
-            for ext in ('dat','atr','hea'):
-                fname = 's'+str(a)+'0'+str(b).zfill(2)+str(c)+'.'+ext
-                get_file(fpath,fname)
+def get_file2(fpath,fname):
+    os.system("wget -c "+fpath+fname)
+
+u = urllib2.urlopen(fpath+"RECORDS")
+records = u.read().split('\n')
+u.close()
+
+print records
+
+for r in records:
+    get_file2(fpath,r+".hea")
+    get_file2(fpath,r+".dat")
+    get_file2(fpath,r+".ecg")
