@@ -6,6 +6,7 @@ from sys import exit
 #import math
 from scipy.signal import fftconvolve
 import anfft
+import time
 
 def write_csv(records,fname):
 	outfile = open(fname, "w")
@@ -97,7 +98,7 @@ def draw_flicker(f,F,y, fname):
 	pylab.ylabel(r"$\log{S}$")
 	pylab.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
 
-def process(record, end=-1):
+def process(record, annotator="atr", num_signals=2, end=-1):
 	print "Processing %s" % (record,)
 	
 
@@ -110,7 +111,7 @@ def process(record, end=-1):
 	print "total time ", int(info['samp_count'])/int(info['samp_freq'])
 
 # rdann(record, annotator, start=0, end=-1, types=[])
-	ann = rdann(record, 'ecg', 0, end)
+	ann = rdann(record, annotator, 0, end)
 # annotation time in samples from start
 	ann_x = (ann[:, 0] - data[0, 0]).astype('int')
 
@@ -122,7 +123,7 @@ def process(record, end=-1):
 
 	print "RR count", len(ann)
 
-	for channel in range(2):
+	for channel in range(num_signals):
 		print "Channel %s" % (channel,)
 		c = 0 # window first RR
 		rr = []
@@ -135,7 +136,7 @@ def process(record, end=-1):
 		#time_interval = (chunk_last-chunk_first)/info['samp_freq']
 			r['time_from'] = data[chunk_first,1]
 			r['time_to'] = data[chunk_last,1]
-			#print "interval ", r['time_from'], " - ", r['time_to'], " = ", (chunk_last-chunk_first)/info['samp_freq'], " s"
+			print "interval ", r['time_from'], " - ", r['time_to'], " = ", (chunk_last-chunk_first)/info['samp_freq'], " s"
 
 			t = data[chunk_first:chunk_last,1] # time array of target window
 			v = data[chunk_first:chunk_last,channel+2] # data value of target window
@@ -175,8 +176,15 @@ def process(record, end=-1):
 	#		out=denoise(v,mode_denoise,nm_dn,J_dn,dn_method,dn_thresh)
 	#		fig(out, show=True)
 
+			t1=time.time()
 			cor = autocor(v)
+#			cor = pylab.correlate(v,v, mode="full")
+#			cor = pylab.correlate(v,v)
+			
+			print "Correlation took %s" % (time.time()-t1, )
 
+			exit(0)
+			
 			Ff, ff = fft(cor, info['samp_freq'])
 			Fc, fc = cut_freq(Ff,ff)
 
@@ -208,5 +216,6 @@ def process(record, end=-1):
 
 
 if __name__ == '__main__':
-	record = 'chf01'
-	process(record)
+	record = 'chf02'
+	annotator = 'ecg'
+	process(record, annotator, 1)
