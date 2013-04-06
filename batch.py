@@ -2,6 +2,7 @@
 
 from process import *
 import os
+import sys
 
 #files = ['16265', '16272', '16273', '16483', '16539', '16773', '16786', '17052', '17453', '18177', '18184', '19090', '19093', '19140', '19830']
 #files = ['16265', '16272', '16273']
@@ -10,11 +11,15 @@ import os
 
 for f in os.listdir('.'):
     path = os.path.splitext(f)
-    if path[1] == '.hea' and not os.path.exists("%s_c0_sdn.png" % path[0]):
+    if path[1] == '.hea' and not os.path.exists("%s_sdn.png" % path[0]):
+	print "*******************  Processing: ", path[0], "********************"
         try:
-            process(path[0])
+            if path[0][0] == 'c':
+                process(path[0], 'ecg')
+            else:
+                process(path[0], 'atr')
         except:
-            print "FAILED"
+            print "FAILED: ", sys.exc_info()
 
 #for f in files:
 #    process(f)

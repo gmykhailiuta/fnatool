@@ -80,6 +80,7 @@ from __future__ import division
 import re
 import warnings
 import numpy
+import datetime as dt
 #import pylab
 #from pprint import pprint
 
@@ -359,20 +360,34 @@ def rdhdr(record):
             "(?P<checksum>[0-9-]*)\s*(?P<block_size>\d*)\s*",
             "(?P<description>[a-zA-Z0-9\s]*)"]))
 
+    DESC_REGEX = re.compile(r''.join([
+            "(?P<age>[\d?]{1,2})\s*",
+            "[^MF]*(?P<gender>[MF]{1})\s*",
+            "(?P<diagnosis>.*)"]))
+
     header_lines, comment_lines = _getheaderlines(record)
     (record_name, seg_count, signal_count, samp_freq,
      counter_freq, base_counter, samp_count,
      base_time, base_date) = RECORD_REGEX.findall(header_lines[0])[0]
+
 
     # use 250 if missing
     if samp_freq == '':
         samp_freq = 250
     if samp_count == '':
         samp_count = 0
+#    if base_time == '':
+#        base_time = '00:00:00'
+#    if base_date == '':
+#        base_date = '01/01/1900'
         
         
     info['samp_freq'] = float(samp_freq)
     info['samp_count'] = int(samp_count)
+    if base_time != '':
+        info['base_time'] = dt.datetime.strptime(base_time, '%H:%M:%S')
+    if base_date != '':
+        info['base_date'] = dt.datetime.strptime(base_date, '%d/%m/%Y')
     
     for sig in range(2):
         (file_name, file_format, samp_per_frame, skew,
@@ -397,6 +412,14 @@ def rdhdr(record):
         info['first_values'].append(float(first_value))
         info['signal_names'].append(signal_name)
 
+	
+    (age, gender, diagnosis) = DESC_REGEX.findall(comment_lines[0])[0]
+    if age != '':
+        info['age'] = age
+    if gender != '':
+        info['gender'] = gender
+    if diagnosis != '':
+        info['diagnosis'] = diagnosis
     return info
         
 def _getheaderlines(record):
