@@ -405,6 +405,7 @@ def rdhdr(record):
             zero_value = 0
         if first_value == '':
             first_value = 0   # do not use to check
+
         
         info['gains'].append(float(gain))
         info['units'].append(units)
@@ -414,12 +415,18 @@ def rdhdr(record):
 
 	
     (age, gender, diagnosis) = DESC_REGEX.findall(comment_lines[0])[0]
-    if age != '':
-        info['age'] = age
-    if gender != '':
-        info['gender'] = gender
-    if diagnosis != '':
-        info['diagnosis'] = diagnosis
+    if age == '':
+        age = '?'
+    if gender == '':
+        gender = '?'
+    if diagnosis == '':
+        diagnosis = '?'
+    #if age != '':
+    info['age'] = age
+    #if gender != '':
+    info['gender'] = gender
+    #if diagnosis != '':
+    info['diagnosis'] = diagnosis
     return info
         
 def _getheaderlines(record):
