@@ -5,17 +5,18 @@ from pprint import pprint
 from sys import exit
 #import math
 from scipy.signal import fftconvolve
-import anfft
+#import anfft
 import datetime as dt
+import numpy as np
 #import time
 
 def write_csv(records,record,info):
   outfile = open(record+".csv", "w")
   if 'diagnosis' in info:
     d = info['diagnosis']
-  outfile.write("%s,%s\n" % (record, d))
+  outfile.write("%s,%s,%s,%s\n" % (record, info['gender'], info['age'], d))
   for r in records:
-    line = "%s,%s,%s,%s,%s,%s,%s,%s\n" % (r['time_from'],r['time_to'],r['beta'],r['std'],r['sdn'],r['mean'],r['gender'],r['age'])
+    line = "%s,%s,%s,%s,%s,%s\n" % (r['time_from'],r['time_to'],r['beta'],r['std'],r['cov'],r['mean'])
     outfile.write(line)
   outfile.close()
 
@@ -27,7 +28,7 @@ def sig2csv(record,t,v,info):
   outfile = open("rr_"+record+".csv", "w")
   for i in range(len(v)):
     t_full = info['base_time'] + dt.timedelta(seconds=t[i])
-    line = "%s,%s,%s\n" % (i+1,t_full.strftime("%H:%M:%S.%f"),v[i])
+    line = "%s %s %s\n" % (i+1,t_full.strftime("%H:%M:%S.%f"),v[i])
     outfile.write(line)
   outfile.close()
 
@@ -43,52 +44,95 @@ def autocor(data):
   cor = cor[len(cor)/2:]
   return cor
 
-def fft(x,samp_freq=250):
-  print "FFT"
-  arr = pl.zeros(2**(round(pylab.log2(len(x)))+8))
-  arr[:len(x)] = x
-  F = abs(anfft.fft(arr))
-#  F = abs(pl.fftpack.fft(arr))
-  f = pl.fftfreq(len(arr), 1/samp_freq)
-  F = F[:len(F)/2]
-  f = f[:len(f)/2]
-  return F, f
+def bandPass(T, V, fname):
+  """
+   Applies an Band Pass filter to V in the frequency domain.
+   In:  V, list with signal
+        fname, file name to save figure to
+   Out: Frequency in lg scale
+        Specturm power in lg scale
+  """
+  n = len(V)
+  Ts = pl.mean(V)
+  T -= min(T)
+  #t = pl.arange(0,sum(V),float(Ts))
+  pl.figure(figsize=(10, 10), facecolor='white')
+  pl.subplot(2,2,1)
+  pl.title("Original signal")
+  pl.xlabel(r"Time, s")
+  pl.ylabel(r"RR, s")
+  pl.xlim(min(T),max(T))
+  pl.ylim(min(V),max(V))
+  pl.plot(T, V)
+  #Vzeroed = pl.zeros(2**(round(pl.log2(len(V)))+0))
+  #Vzeroed[:len(V)] = V
+  #while len(T) < len(Vzeroed):
+  #  T = pl.append(T,T[len(T)-1]+Ts)
+  #pl.plot(T, Vzeroed)
+  I = pl.fftshift(pl.fft(V)) # entering to frequency domain
+  ffs = pl.fftshift(pl.fftfreq(len(V), Ts))
+  # fftshift moves zero-frequency component 
+  # to the center of the array
+  #P = pl.zeros(2**(round(pl.log2(len(I)))+8), dtype=complex)
+  #n = len(P)
+  P = pl.zeros(I.shape,dtype=complex)
+  pl.subplot(2,2,2)
+  pl.title("Original signal - Fourier Specturm")
+  pl.xlabel(r"f, Hz")
+  pl.ylabel(r"$\lg S(f)$")
+  F = pl.log10(abs(I))
+  pl.xlim(min(ffs),max(ffs))
+  pl.ylim(min(F),max(F))
+  pl.plot(ffs,F)
 
-def fft2(x,sample_spacing):
-  print "FFT"
-  arr = pl.zeros(2**(round(pylab.log2(len(x)))+8))
-  arr[:len(x)] = x
-  F = abs(anfft.fft(arr))
-#  F = abs(pl.fftpack.fft(arr))
-  f = pl.fftfreq(len(arr), sample_spacing)
-  F = F[:len(F)/2]
-  f = f[:len(f)/2]
-  return F, f
+  for i in range(n):  # frequency cutting
+    if 0.003 < abs(ffs[i]) and abs(ffs[i]) < 0.04:
+    #if abs(ffs[i]) < 0.4:
+      P[i] = I[i]
 
-def cut_freq(s,f,fmin=0.004,fmax=0.4):
-  print "Cutting freqs %s - %s" % (fmin, fmax)
-  imin = f.searchsorted(fmin)
-  imax = f.searchsorted(fmax)
-  return s[imin:imax], f[imin:imax]
+  Vfilt = np.real(pl.ifft(pl.ifftshift(P)))
+  pl.subplot(2,2,3)
+  pl.title("Filtered signal")
+  pl.xlabel(r"Time, s")
+  pl.ylabel(r"RR, s")
+  pl.xlim(min(T),max(T))
+  pl.ylim(min(Vfilt),max(Vfilt))
+  pl.plot(T, Vfilt)
+  pl.subplot(2,2,4)
+  pl.title("Filtered signal - Fourier Specturm")
+  pl.xlabel(r"f, Hz")
+  pl.ylabel(r"$\lg S(f)$")
+  Ffilt = pl.log10(abs(P))
+  pl.xlim(min(ffs),max(ffs))
+  pl.ylim(min(F),max(F))
+  pl.plot(ffs,Ffilt)
+  #pl.figure()
+  #pl.plot(pl.log10(ffs[range(n/2,n)]),pl.log10(abs(P))[range(n/2,n)])
+  #pl.show()
+  #exit(0)
+  pl.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
+  pl.close()
+  flog = np.real(pl.log10(ffs[range(n/2,n)]))
+  Flog = np.real(pl.log10(abs(2*P)/len(P))[range(n/2,n)])
+  flog_ = list()
+  Flog_ = list()
+  for i in range(len(flog)):
+    #if np.isinf(flog[i]):
+    #  flog[i] = 10**-10
+    #if np.isinf(Flog[i]):
+    #  Flog[i] = 10**-10
 
-def cut_freq0(s,f,fmin=0.004,fmax=0.4):
-  print "Cutting freqs %s - %s" % (fmin, fmax)
-  imin = f.searchsorted(fmin)
-  imax = f.searchsorted(fmax)
-  s[:imin] = 0
-  f[:imin] = 0
-  s[imax:] = 0
-  f[imax:] = 0
-  return s, f
+    if (not np.isinf(flog[i])) and (not np.isinf(Flog[i])):
+      flog_.append(flog[i])
+      Flog_.append(Flog[i])
+  #fig(flog_, Flog_, show=1)
+  del flog, Flog
+  return Vfilt,flog_,Flog_
 
-def aprox(x,l  A = pylab.vstack([x, pylab.ones(len(x))]).T
+def aprox(x,y):
+  A = pl.vstack([x, pl.ones(len(x))]).T
   a, b = pl.lstsq(A, y)[0]
   return a, b
-
-#def beta(x,y):
-#  a, b = aprox(x,y)
-#  print "beta = %s" % (-_a, )
-#  return -a
 
 def fig(in1,in2=None,label="",show=False):  
   pl.figure(facecolor='white')
@@ -100,8 +144,8 @@ def fig(in1,in2=None,label="",show=False):
     pl.show()
     exit(0)
 
-def draw_sdn(rr, fname):
-  x = [x['sdn'] for x in rr]
+def draw_cov(rr, fname):
+  x = [x['cov'] for x in rr]
   y = [y['beta'] for y in rr]
   pl.figure(figsize=(6, 6), facecolor='white')
   pl.plot(x,y,'.r')
@@ -116,7 +160,7 @@ def draw_sdn(rr, fname):
 
 
 def draw_std(rr, fname):
-  x = [x['std']*1000 for x in rr]
+  x = [x['std'] for x in rr]
   y = [y['beta'] for y in rr]
   pl.figure(figsize=(6, 6), facecolor='white')
   pl.plot(x,y,'.r')
@@ -133,10 +177,11 @@ def draw_flicker(f,F,y, fname):
   pl.figure(figsize=(6, 6),facecolor='white')
   pl.plot(f,F,'b')
   pl.plot(f,y,'r')
-  pl.xlabel(r"$\log{f}$")
-  pl.ylabel(r"$\log{S}$")
+  pl.xlim(min(f),max(f))
+  pl.xlabel(r"$\lg f$")
+  pl.ylabel(r"$\lg S$")
   pl.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
-#  pl.close()
+  pl.close()
 
 def draw_sig(fname, x, y):
   pl.figure(figsize=(100, 6), facecolor='white')
@@ -147,10 +192,20 @@ def draw_sig(fname, x, y):
   pl.close()
 
 def delta(data):
-  d = pl.zeros(len(data)-1)
+  D = pl.zeros(len(data)-1)
   for i in range(1,len(data)):
-    d[i-1] = data[i]-data[i-1]
-  return d
+    d = data[i]-data[i-1]
+    D[i-1] = d
+  #fig(D)
+  #m = pl.mean(D)
+  #for i in range(1,len(D)):
+  #  if D[i] > m and D[i]-m > 0.5:
+  #    D[i] -= 0.4
+  #  if D[i] < m and m-D[i] > 0.5:
+  #    D[i] += 0.4
+  
+  #fig(D,show=1)
+  return D
 
 def process(record, annotator="atr", end=-1):
   print "Processing %s" % (record,)
@@ -173,8 +228,9 @@ def process(record, annotator="atr", end=-1):
   T = [row[1] for row in ann]
   V = delta(T)
   T.pop()
-  sig2csv(record,T,V,info)
-  draw_sig(record+".png",T,V)
+  #fig(T,V,show=1)
+  #sig2csv(record,T,V,info)
+  #draw_sig(record+".png",T,V)
   
   ## write data
 #  write_csv_data(record,ann,info)
@@ -184,7 +240,7 @@ def process(record, annotator="atr", end=-1):
 #  plot_data(data, info, ann)
 #  exit(0)
 
-  w = 1000 # window last RR
+  w = 1024 # window last RR
 
   print "RR count", len(ann)
 
@@ -196,11 +252,11 @@ def process(record, annotator="atr", end=-1):
     print "RR %s - %s / %s" % (c,c+w,len(ann))
     #chunk_first = ann[c][0] # get sample number of first RR interval
     #chunk_last = ann[c+w][0] # get sample number of last RR interval
-    for key in ['age','gender']:
-      if key in info:
-        r[key] = info[key]
-      else:
-        r[key] = ''
+    #for key in ['age','gender']:
+    #  if key in info:
+    #    r[key] = info[key]
+    #  else:
+    #    r[key] = ''
 
     r_first = T[c]
     r_last = T[c+w]
@@ -214,14 +270,23 @@ def process(record, annotator="atr", end=-1):
       r['time_from'] = str(dt.timedelta(0,r_first))
       r['time_to'] = str(dt.timedelta(0,r_last))
     
-     t = T[c:c+w]
+    t = T[c:c+w]
     v = V[c:c+w]
 
 #    fig(t,v,show=True)
 #    write_csv_data(record,t,v)
-    r['std'] = pl.std(v)
-    r['mean'] = pl.mean(v)
-    r['sdn'] = r['std']/r['mean']
+    #v2 = pl.zeros(2**(round(pl.log2(len(v)))+4))
+    #v2[:len(v)] = v
+    #print(len(v))
+    #print(len(v2))
+
+    v_filt, fc, Fc = bandPass(t, v, "%s_s%s.png" % (record, int(c/w)))
+    #print v_filt
+    #print v
+    #print(len(v_filt))
+    r['std'] = pl.std(v)*1000
+    r['mean'] = pl.mean(v)*1000
+    r['cov'] = r['std']/r['mean']*100
 
 #    vx = v/max(v) - r['mean']
 #    vx = v - min(v)
@@ -255,7 +320,7 @@ def process(record, annotator="atr", end=-1):
 
 #      t1=time.time()
 #    cor = autocor(v)
-    cor = v
+#    cor = v
 #    cor = pl.correlate(v,v, mode="full")
 #      cor = pl.correlate(v,v)
 
@@ -266,9 +331,9 @@ def process(record, annotator="atr", end=-1):
 
     
     #Ff, ff = fft2(cor, info['samp_freq'])
-    Ff, ff = fft2(v, (r_last - r_first)/1000)
+    #Ff, ff = fft2(v, (r_last - r_first)/1000)
 
-    fig(ff,Ff,show=True)
+    #fig(ff,Ff,show=True)
 #    fig(v)
 #    F = abs(pl.fft(v))
 #    
@@ -279,32 +344,34 @@ def process(record, annotator="atr", end=-1):
 #    fig(fc,Fc,show=True)
 #    del cor, v
 
-    Fc, fc = cut_freq(Ff,ff)
-    fig(fc,Fc,show=False)
+    #Fc, fc = cut_freq(Ff,ff)
+    #fig(fc,Fc,show=False)
 
 #    v_filt = abs(anfft.ifft(Fc))
 #    fig(v_filt,show=True)
-    del Ff, ff
+    #del Ff, ff
     
-    Fc = pl.log10(Fc)
-    fc = pl.log10(fc)
-    fig(fc,Fc,show=False)
-
-    _l = aprox(fc,Fc)
+    #Fc = pl.log10(Fc)
+    #fc = pl.log10(fc)
+    #fig(fc,Fc,show=False)
+    #print("aprox")
+    _a,_b = aprox(fc,Fc)
     r['beta'] = -_a
-    draw_flicker(fc,Fc,_a*fc+_b,"%s_flicker_i%s.png" % (record, int(c/w)))
+    #print("done")
+    y = [_a*x+_b for x in fc]
+    draw_flicker(fc,Fc,y,"%s_flicker_i%s.png" % (record, int(c/w)))
     #exit(0)
 
-    pylab.show()
-    exit(0)
+#    pylab.show()
+ #   exit(0)
 
-
+    del fc, Fc, y, v_filt
     pprint(r)
     rr.append(r)
     c +=w
 
   draw_std(rr, "%s_std.png" % (record, ))
-  draw_sdn(rr, "%s_sdn.png" % (record, ))
+  draw_cov(rr, "%s_cov.png" % (record, ))
 
   write_csv(rr, record, info)
   del rr, data, info, ann, ann_x  
@@ -313,6 +380,6 @@ def process(record, annotator="atr", end=-1):
 
 
 if __name__ == '__main__':
-  record = 's20011'
+  record = '16795'
   annotator = 'atr'
-  process(record, annotator, 1010)
+  process(record, annotator)

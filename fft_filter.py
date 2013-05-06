@@ -15,6 +15,7 @@ def bandPass(V):
  pl.figure()
  pl.subplot(2,2,1)
  pl.title("Original signal")
+ #V = pl.sort(V)
  pl.plot(t, V)
  I = pl.fftshift(pl.fft(V)) # entering to frequency domain
  ffs = pl.fftshift(pl.fftfreq(len(V), Ts))

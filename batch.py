@@ -11,7 +11,7 @@ import sys
 
 for f in os.listdir('.'):
     path = os.path.splitext(f)
-    if path[1] == '.hea' and not os.path.exists("%s_sdn.png" % path[0]):
+    if path[1] == '.hea' and not os.path.exists("%s_std.png" % path[0]):
 	print "*******************  Processing: ", path[0], "********************"
         try:
             if path[0][0] == 'c':
