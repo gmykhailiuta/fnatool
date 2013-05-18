@@ -212,24 +212,25 @@ def draw_sig(fname, x, y):
   pl.close()
 
 def variability(r_times):
-  rrs = pl.zeros(len(r_times)-1, dtype='float32')
-  time = pl.array(r_times[1:], dtype='float32')
+  rrs = pl.zeros(len(r_times), dtype='float32')
+  time = pl.array(r_times, dtype='float32')
   last_r_time = 0
   last_rr = 0
+  time[0] = 0
   for i in range(len(r_times)):
     if last_r_time: # do not count delta for 1st value
-      rr = r_time-last_r_time
+      rr = r_times[i]-last_r_time
       if abs(last_rr / rr - 1) <= 0.2: # current rr differs less then 20% of previous one
         rrs[i] = rr
       else:
         rrs[i] = 0
         time[i] = 0
       last_rr = rr       
-    last_r_time = r_time
+    last_r_time = r_times[i]
   rrs = pl.ma.masked_equal(rrs,0)
-  rrs = rrs.compressed()
+  rrs = pl.ma.compressed(rrs)
   time = pl.ma.masked_equal(time,0)
-  time = rrs.compressed()
+  time = pl.ma.compressed(time)
   return time, rrs
 
 """Ideas:
