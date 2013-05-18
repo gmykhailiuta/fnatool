@@ -16,8 +16,7 @@ def write_csv(records,record,info):
     d = info['diagnosis']
   outfile.write("%s,%s,%s,%s\n" % (record, info['gender'], info['age'], d))
   for r in records:
-    line = "%s,%s,%s,%s,%s,%s\n" % (r['time_from'],r['time_to'],r['beta'],r['std'],r['cov'],r['mean'])
-    outfile.write(line)
+    outfile.write("%(time_from)s,%(time_to)s,%(beta)s,%(std)s,%(cov)s,%(mean)s\n" % r)
   outfile.close()
 
 def sig2csv(record,t,v,info):
@@ -44,19 +43,38 @@ def autocor(data):
   cor = cor[len(cor)/2:]
   return cor
 
-def bandPass(T, V, fname):
+def bandPass(T, V, TD, D, fname):
   """
    Applies an Band Pass filter to V in the frequency domain.
-   In:  V, list with signal
+   In:  T, list with time axis
+        V, list with RR length signal
+        TD, list with time axis for ECG signal
+        D, list with data signal
         fname, file name to save figure to
    Out: Frequency in lg scale
         Specturm power in lg scale
   """
   n = len(V)
-  Ts = pl.mean(V)
+  #Ts = pl.mean(V)
+  Ts = 1.0/3
   T -= min(T)
   #t = pl.arange(0,sum(V),float(Ts))
-  pl.figure(figsize=(10, 10), facecolor='white')
+  fig = pl.figure(figsize=(10, 10), facecolor='white')
+  def onclick(event):
+    print 'button=%d, x=%d, y=%d, xdata=%f, ydata=%f'%(
+        event.button, event.x, event.y, event.xdata, event.ydata)
+  cid = fig.canvas.mpl_connect('button_press_event', onclick)
+  def on_key(event):
+    print('you pressed', event.key, event.xdata, event.ydata)
+
+  cid = fig.canvas.mpl_connect('key_press_event', on_key)
+
+  #pl.subplot(2,2,1)
+  #print len(TD)
+  #print len(D)
+  #pl.plot(TD, D)
+
+
   pl.subplot(2,2,1)
   pl.title("Original signal")
   pl.xlabel(r"Time, s")
@@ -108,8 +126,10 @@ def bandPass(T, V, fname):
   pl.plot(ffs,Ffilt)
   #pl.figure()
   #pl.plot(pl.log10(ffs[range(n/2,n)]),pl.log10(abs(P))[range(n/2,n)])
-  #pl.show()
-  #exit(0)
+  
+  pl.show()
+  exit(0)
+  
   pl.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
   pl.close()
   flog = np.real(pl.log10(ffs[range(n/2,n)]))
@@ -191,43 +211,46 @@ def draw_sig(fname, x, y):
   pl.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
   pl.close()
 
-def delta(data):
-  D = pl.zeros(len(data)-1)
-  for i in range(1,len(data)):
-    d = data[i]-data[i-1]
-    D[i-1] = d
-  #fig(D)
-  #m = pl.mean(D)
-  #for i in range(1,len(D)):
-  #  if D[i] > m and D[i]-m > 0.5:
-  #    D[i] -= 0.4
-  #  if D[i] < m and m-D[i] > 0.5:
-  #    D[i] += 0.4
-  
-  #fig(D,show=1)
-  return D
+def variability(r_times):
+  #rrs = pl.zeros(len(r_times)-1)
+  rrs = []
+  last_r_time = 0
+  last_rr = 0
+  for r_time in r_times:
+    if last_r_time: # do not count delta for 1st value
+      rr = r_time-last_r_time
+      if abs(last_rr / rr - 1) <= 0.2: # current rr differs less then 20% of previous one
+        rrs.append(rr)
+      last_rr = rr        
+    last_r_time = r_time
+  time = r_times[1:]
+#  import sys
+#  print "size of rrs", sys.getsizeof(rrs)
+#  arr1 = pl.zeros(len(rrs), dtype='float32')
+#  print "size of np.rrs", arr1.nbytes
+  return time, rrs
 
 def process(record, annotator="atr", end=-1):
   print "Processing %s" % (record,)
 
   # Read in the data from 0 to 10 seconds
   # rdsamp(record, start=0, end=-1, interval=-1)
-  data, info = rdsamp(record, 0, 10)
+  data, info = rdsamp(record, 0, end)
   pprint(info)
-#  pprint(data[:100])
+  #pprint(data[:100])
 
   print "total time ", int(info['samp_count'])/int(info['samp_freq'])
 
 # rdann(record, annotator, start=0, end=-1, types=[])
   ann = rdann(record, annotator, 0, end)
-#  print ann[:100]
+  #print ann[:100]
 # annotation time in samples from start
   ann_x = (ann[:, 0] - data[0, 0]).astype('int')
 
-
+  S = [row[0] for row in ann]
   T = [row[1] for row in ann]
-  V = delta(T)
-  T.pop()
+  T, V = variability(T)
+  
   #fig(T,V,show=1)
   #sig2csv(record,T,V,info)
   #draw_sig(record+".png",T,V)
@@ -240,7 +263,7 @@ def process(record, annotator="atr", end=-1):
 #  plot_data(data, info, ann)
 #  exit(0)
 
-  w = 1024 # window last RR
+  w = 10240 # window last RR
 
   print "RR count", len(ann)
 
@@ -272,6 +295,11 @@ def process(record, annotator="atr", end=-1):
     
     t = T[c:c+w]
     v = V[c:c+w]
+    print S[c]
+    print S[c+w]
+    print len(data)
+    d = data[S[c]:S[c+w],2]
+    td = data[S[c]:S[c+w],1]
 
 #    fig(t,v,show=True)
 #    write_csv_data(record,t,v)
@@ -280,7 +308,7 @@ def process(record, annotator="atr", end=-1):
     #print(len(v))
     #print(len(v2))
 
-    v_filt, fc, Fc = bandPass(t, v, "%s_s%s.png" % (record, int(c/w)))
+    v_filt, fc, Fc = bandPass(t, v, td, d, "%s_s%s.png" % (record, int(c/w)))
     #print v_filt
     #print v
     #print(len(v_filt))
