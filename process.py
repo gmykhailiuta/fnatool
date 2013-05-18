@@ -212,23 +212,32 @@ def draw_sig(fname, x, y):
   pl.close()
 
 def variability(r_times):
-  #rrs = pl.zeros(len(r_times)-1)
-  rrs = []
+  rrs = pl.zeros(len(r_times)-1, dtype='float32')
+  time = pl.array(r_times[1:], dtype='float32')
   last_r_time = 0
   last_rr = 0
-  for r_time in r_times:
+  for i in range(len(r_times)):
     if last_r_time: # do not count delta for 1st value
       rr = r_time-last_r_time
       if abs(last_rr / rr - 1) <= 0.2: # current rr differs less then 20% of previous one
-        rrs.append(rr)
-      last_rr = rr        
+        rrs[i] = rr
+      else:
+        rrs[i] = 0
+        time[i] = 0
+      last_rr = rr       
     last_r_time = r_time
-  time = r_times[1:]
-#  import sys
-#  print "size of rrs", sys.getsizeof(rrs)
-#  arr1 = pl.zeros(len(rrs), dtype='float32')
-#  print "size of np.rrs", arr1.nbytes
+  rrs = pl.ma.masked_equal(rrs,0)
+  rrs = rrs.compressed()
+  time = pl.ma.masked_equal(time,0)
+  time = rrs.compressed()
   return time, rrs
+
+"""Ideas:
+interpolate rrs signal
+fuck all: return to working version
+get betas for sleeping|unsleeping periods - mark them "S"|"US"
+compare betas depending on hour
+"""
 
 def process(record, annotator="atr", end=-1):
   print "Processing %s" % (record,)
