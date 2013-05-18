@@ -295,8 +295,8 @@ def process(record, annotator="atr", end=-1):
     r_last = T[c+w]
     print "interval %s - %s = %s s" % (r_first, r_last, r_last - r_first)
     if "base_time" in info:
-      r_first_full = info['base_time'] + dt.timedelta(seconds=r_first)
-      r_last_full = info['base_time'] + dt.timedelta(seconds=r_last)
+      r_first_full = info['base_time'] + dt.timedelta(seconds=float(r_first))
+      r_last_full = info['base_time'] + dt.timedelta(seconds=float(r_last))
       r['time_from'] = r_first_full.strftime("%H:%M:%S.%f")
       r['time_to'] = r_last_full.strftime("%H:%M:%S.%f")
     else:
