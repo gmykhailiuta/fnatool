@@ -10,6 +10,9 @@ import datetime as dt
 import numpy as np
 #import time
 
+WINDOW = 1024
+INTERP_FREQ = 
+
 def write_csv(records,record,info):
   outfile = open(record+".csv", "w")
   if 'diagnosis' in info:
@@ -127,8 +130,8 @@ def bandPass(T, V, TD, D, fname):
   #pl.figure()
   #pl.plot(pl.log10(ffs[range(n/2,n)]),pl.log10(abs(P))[range(n/2,n)])
   
-  pl.show()
-  exit(0)
+  #pl.show()
+  #exit(0)
   
   pl.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
   pl.close()
@@ -240,6 +243,75 @@ get betas for sleeping|unsleeping periods - mark them "S"|"US"
 compare betas depending on hour
 """
 
+def plot_signals(data, info, hrv_time, hrv_data, hrv_interp_time, hrv_interp_data, ann=None):
+    """
+    Plot the signals HRV.
+
+    Parameters
+    ----------
+    data : (N, 4) ndarray
+         Output array from rdsamp.
+    info : dict
+         Header information as a dictionary.
+         Output from rdsamp
+    ann : (N, 2) ndarray, optional
+         Output from rdann
+
+    Returns
+    -------
+    None
+    Matplotlib figure is plotted with the signals and annotations.
+    """
+
+    time = data[:, 1] #in seconds. use data[:, 0] to use sample no.
+    sig1 = data[:, 2]
+    sig2 = data[:, 3]
+    
+    pl.figure()
+    pl.subplot(311)
+    pl.plot(time, sig1, '-')
+    pl.xticks([])
+    pl.ylabel('%s (mV)' %(info['signal_names'][0]))
+    
+    pl.subplot(312)
+    pl.plot(time, sig2, 'k')
+    pl.xticks([])
+    pl.ylabel('%s (mV)' %(info['signal_names'][1])) 
+    
+
+    if ann != None:
+        # annotation time in samples from start
+        ann_x = (ann[:, 0] - data[0, 0]).astype('int')
+        pl.plot(ann[:, 1], data[ann_x, 3], 'xr')
+        pl.subplot(311)
+        pl.plot(ann[:, 1], data[ann_x, 2], 'xr')
+
+    pl.subplot(313)
+    pl.plot(hrv_time, hrv_data, '.')
+    pl.xticks([])
+    pl.ylabel('HRV (s)') 
+    #pl.subplot(414)
+    pl.plot(hrv_interp_time, hrv_interp_data, 'k-')
+
+    pl.xlabel('Time (s)')
+
+    pl.show()
+
+def interpolate(x, y):
+    """
+    x : ndarray
+    y : ndarray
+        Input data
+    freq : int, optional
+        New signal frequency
+    """
+    from scipy import interpolate
+
+    tck = interpolate.splrep(x, y, s=0)
+    xnew = pl.arange(x.min(), x.max(), 1.0/INTERP_FREQ, dtype='float32')
+    ynew = interpolate.splev(xnew,tck,der=0)
+    return xnew, ynew
+
 def process(record, annotator="atr", end=-1):
   print "Processing %s" % (record,)
 
@@ -257,10 +329,15 @@ def process(record, annotator="atr", end=-1):
 # annotation time in samples from start
   ann_x = (ann[:, 0] - data[0, 0]).astype('int')
 
-  S = [row[0] for row in ann]
-  T = [row[1] for row in ann]
-  T, V = variability(T)
+  ann_samples = [row[0] for row in ann]
+  ann_time = [row[1] for row in ann]
+  time, hrv = variability(ann_time)
   
+  time, hrv = interpolate(time, hrv)
+
+  #plot_signals(data, info, T, V, ann)
+  #exit(0)
+
   #fig(T,V,show=1)
   #sig2csv(record,T,V,info)
   #draw_sig(record+".png",T,V)
@@ -273,12 +350,11 @@ def process(record, annotator="atr", end=-1):
 #  plot_data(data, info, ann)
 #  exit(0)
 
-  w = 10240 # window last RR
-
   print "RR count", len(ann)
 
   c = 0 # window first RR
   rr = []
+#  for i in range(0, INTERP_FREQ*1024, len(time)): # get 1024 secs exactly
   while c+w < len(T):
     r = {}
   # get 10 RRs
@@ -311,25 +387,11 @@ def process(record, annotator="atr", end=-1):
     d = data[S[c]:S[c+w],2]
     td = data[S[c]:S[c+w],1]
 
-#    fig(t,v,show=True)
-#    write_csv_data(record,t,v)
-    #v2 = pl.zeros(2**(round(pl.log2(len(v)))+4))
-    #v2[:len(v)] = v
-    #print(len(v))
-    #print(len(v2))
-
     v_filt, fc, Fc = bandPass(t, v, td, d, "%s_s%s.png" % (record, int(c/w)))
-    #print v_filt
-    #print v
-    #print(len(v_filt))
+    
     r['std'] = pl.std(v)*1000
     r['mean'] = pl.mean(v)*1000
     r['cov'] = r['std']/r['mean']*100
-
-#    vx = v/max(v) - r['mean']
-#    vx = v - min(v)
-#    vx = vx / max(v)
-#    v = vx
 
 #    fig(t,v)
 #    import pywt
@@ -418,6 +480,6 @@ def process(record, annotator="atr", end=-1):
 
 
 if __name__ == '__main__':
-  record = '16795'
-  annotator = 'atr'
-  process(record, annotator)
+  record = 'chf01'
+  annotator = 'ecg'
+  process(record, annotator, 100)
