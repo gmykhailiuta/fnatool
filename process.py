@@ -11,7 +11,7 @@ import numpy as np
 #import time
 
 WINDOW = 1024
-INTERP_FREQ = 
+INTERP_FREQ = 16
 
 def write_csv(records,record,info):
   outfile = open(record+".csv", "w")
@@ -46,20 +46,19 @@ def autocor(data):
   cor = cor[len(cor)/2:]
   return cor
 
-def bandPass(T, V, TD, D, fname):
+def bandPass(T, V, fname):
   """
    Applies an Band Pass filter to V in the frequency domain.
    In:  T, list with time axis
         V, list with RR length signal
-        TD, list with time axis for ECG signal
-        D, list with data signal
+        #TD, list with time axis for ECG signal
+        #D, list with data signal
         fname, file name to save figure to
    Out: Frequency in lg scale
         Specturm power in lg scale
   """
   n = len(V)
   #Ts = pl.mean(V)
-  Ts = 1.0/3
   T -= min(T)
   #t = pl.arange(0,sum(V),float(Ts))
   fig = pl.figure(figsize=(10, 10), facecolor='white')
@@ -91,7 +90,7 @@ def bandPass(T, V, TD, D, fname):
   #  T = pl.append(T,T[len(T)-1]+Ts)
   #pl.plot(T, Vzeroed)
   I = pl.fftshift(pl.fft(V)) # entering to frequency domain
-  ffs = pl.fftshift(pl.fftfreq(len(V), Ts))
+  ffs = pl.fftshift(pl.fftfreq(len(V), INTERP_FREQ))
   # fftshift moves zero-frequency component 
   # to the center of the array
   #P = pl.zeros(2**(round(pl.log2(len(I)))+8), dtype=complex)
@@ -131,7 +130,7 @@ def bandPass(T, V, TD, D, fname):
   #pl.plot(pl.log10(ffs[range(n/2,n)]),pl.log10(abs(P))[range(n/2,n)])
   
   #pl.show()
-  #exit(0)
+ # exit(0)
   
   pl.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
   pl.close()
@@ -302,38 +301,40 @@ def interpolate(x, y):
     x : ndarray
     y : ndarray
         Input data
-    freq : int, optional
-        New signal frequency
+    returns
+    xnew, ynew : ndarray, ndarray
+        Interpolated data
     """
     from scipy import interpolate
 
     tck = interpolate.splrep(x, y, s=0)
     xnew = pl.arange(x.min(), x.max(), 1.0/INTERP_FREQ, dtype='float32')
     ynew = interpolate.splev(xnew,tck,der=0)
+    print "old: %s %s", y.min(), y.max()
+    print "new: %s %s", ynew.min(), ynew.max()
     return xnew, ynew
 
-def process(record, annotator="atr", end=-1):
+def process(record, annotator="atr", start=0, end=-1):
   print "Processing %s" % (record,)
 
   # Read in the data from 0 to 10 seconds
   # rdsamp(record, start=0, end=-1, interval=-1)
-  data, info = rdsamp(record, 0, end)
+  data, info = rdsamp(record, start, end)
   pprint(info)
   #pprint(data[:100])
 
   print "total time ", int(info['samp_count'])/int(info['samp_freq'])
 
 # rdann(record, annotator, start=0, end=-1, types=[])
-  ann = rdann(record, annotator, 0, end)
+  ann = rdann(record, annotator, start, end)
   #print ann[:100]
 # annotation time in samples from start
   ann_x = (ann[:, 0] - data[0, 0]).astype('int')
 
-  ann_samples = [row[0] for row in ann]
   ann_time = [row[1] for row in ann]
   time, hrv = variability(ann_time)
   
-  time, hrv = interpolate(time, hrv)
+  time_interp, hrv_interp = interpolate(time, hrv)
 
   #plot_signals(data, info, T, V, ann)
   #exit(0)
@@ -351,14 +352,11 @@ def process(record, annotator="atr", end=-1):
 #  exit(0)
 
   print "RR count", len(ann)
-
   c = 0 # window first RR
-  rr = []
-#  for i in range(0, INTERP_FREQ*1024, len(time)): # get 1024 secs exactly
-  while c+w < len(T):
-    r = {}
-  # get 10 RRs
-    print "RR %s - %s / %s" % (c,c+w,len(ann))
+  results = []
+  for frag in range(0, int(len(time_interp) / INTERP_FREQ / WINDOW)): # get WINDOW secs exactly
+    result = {}
+    print "fragment %s of %s" % (frag+1, int(len(time_interp) / INTERP_FREQ / WINDOW))
     #chunk_first = ann[c][0] # get sample number of first RR interval
     #chunk_last = ann[c+w][0] # get sample number of last RR interval
     #for key in ['age','gender']:
@@ -367,31 +365,33 @@ def process(record, annotator="atr", end=-1):
     #  else:
     #    r[key] = ''
 
-    r_first = T[c]
-    r_last = T[c+w]
-    print "interval %s - %s = %s s" % (r_first, r_last, r_last - r_first)
+    frag_beg = frag * INTERP_FREQ * WINDOW
+    frag_end = (frag+1) * INTERP_FREQ * WINDOW
+    print "interval %s - %s = %s s" % (time_interp[frag_beg], time_interp[frag_end],
+        time_interp[frag_end] - time_interp[frag_beg])
     if "base_time" in info:
-      r_first_full = info['base_time'] + dt.timedelta(seconds=float(r_first))
-      r_last_full = info['base_time'] + dt.timedelta(seconds=float(r_last))
-      r['time_from'] = r_first_full.strftime("%H:%M:%S.%f")
-      r['time_to'] = r_last_full.strftime("%H:%M:%S.%f")
+      r_first_full = info['base_time'] + \
+          dt.timedelta(seconds=float(time_interp[frag_beg]))
+      r_last_full = info['base_time'] + \
+          dt.timedelta(seconds=float(time_interp[frag_end]))
+      result['time_from'] = r_first_full.strftime("%H:%M:%S.%f")
+      result['time_to'] = r_last_full.strftime("%H:%M:%S.%f")
     else:
-      r['time_from'] = str(dt.timedelta(0,r_first))
-      r['time_to'] = str(dt.timedelta(0,r_last))
+      result['time_from'] = str(dt.timedelta(0,time_interp[frag_beg]))
+      result['time_to'] = str(dt.timedelta(0,time_interp[frag_end]))
     
-    t = T[c:c+w]
-    v = V[c:c+w]
-    print S[c]
-    print S[c+w]
-    print len(data)
-    d = data[S[c]:S[c+w],2]
-    td = data[S[c]:S[c+w],1]
+    #print S[c]
+    #print S[c+w]
+    #print len(data)
+    #d = data[S[c]:S[c+w],2]
+    #td = data[S[c]:S[c+w],1]
 
-    v_filt, fc, Fc = bandPass(t, v, td, d, "%s_s%s.png" % (record, int(c/w)))
+    v_filt, fc, Fc = bandPass(time_interp[frag_beg: frag_end], \
+        hrv_interp[frag_beg: frag_end], "%s_s%s.png" % (record, frag))
     
-    r['std'] = pl.std(v)*1000
-    r['mean'] = pl.mean(v)*1000
-    r['cov'] = r['std']/r['mean']*100
+    result['std'] = (hrv[frag_beg: frag_end]).std()*1000
+    result['mean'] = (hrv[frag_beg: frag_end]).mean()*1000
+    result['cov'] = result['std']/result['mean']*100
 
 #    fig(t,v)
 #    import pywt
@@ -456,30 +456,34 @@ def process(record, annotator="atr", end=-1):
     #fig(fc,Fc,show=False)
     #print("aprox")
     _a,_b = aprox(fc,Fc)
-    r['beta'] = -_a
+    result['beta'] = -_a
     #print("done")
     y = [_a*x+_b for x in fc]
-    draw_flicker(fc,Fc,y,"%s_flicker_i%s.png" % (record, int(c/w)))
+    draw_flicker(fc,Fc,y,"%s_flicker_i%s.png" % (record, frag))
     #exit(0)
 
 #    pylab.show()
  #   exit(0)
 
     del fc, Fc, y, v_filt
-    pprint(r)
-    rr.append(r)
-    c +=w
+    pprint(result)
+    results.append(result)
 
-  draw_std(rr, "%s_std.png" % (record, ))
-  draw_cov(rr, "%s_cov.png" % (record, ))
+  draw_std(results, "%s_std.png" % (record, ))
+  draw_cov(results, "%s_cov.png" % (record, ))
 
-  write_csv(rr, record, info)
-  del rr, data, info, ann, ann_x  
+  write_csv(results, record, info)
+  del data, info, ann, results
 
 
 
 
 if __name__ == '__main__':
-  record = 'chf01'
-  annotator = 'ecg'
-  process(record, annotator, 100)
+  normal = True
+  if normal:
+    record = '16265'
+    annotator = 'atr'
+  else:
+    record = 'chf01'
+    annotator = 'ecg'
+  process(record, annotator)
