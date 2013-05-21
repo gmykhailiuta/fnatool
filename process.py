@@ -5,15 +5,15 @@ from wfdbtools import rdsamp, rdann, plot_data
 from sys import exit
 #import math
 #from scipy.signal import fftconvolve
-import anfft
+#import anfft
 import datetime as dt
-import numpy as np
+#import numpy as np
 #from scipy import interpolate
 from scipy.interpolate import interp1d,splrep,splev
 #import time
 
-WINDOW = 1024
-INTERP_FREQ = 9
+WINDOW = 3072
+INTERP_FREQ = 8
 
 
 def results_to_csv(results,record,info,diagnosis="?"):
@@ -35,7 +35,7 @@ def signal_to_csv(record,time,hrv,info):
     outfile.write(line)
   outfile.close()
 
-def fft_filter(time, signal, result, freq_limit = (0.004, 0.04)):
+def fft_filter(time, signal, result, freq_limit = (0.0033, 0.4)):
   """
    Applies an Band Pass filter to signal in the frequency domain and plots
       signals and their spectrals.
@@ -59,20 +59,18 @@ def fft_filter(time, signal, result, freq_limit = (0.004, 0.04)):
   # cid = fig.canvas.mpl_connect('key_press_event', on_key)
   
 
-  n = len(signal)  
-  signal_wide = pl.zeros(2**(round(pl.log2(len(signal)))+4))
-  time_wide = pl.copy(signal_wide)
-  signal_wide[:len(signal)] = signal
-  time_wide[:len(time)] = time
-  signal = signal_wide
-  time = time_wide
+  #n = len(signal)  
+  #signal_wide = pl.zeros(2**(round(pl.log2(len(signal)))+4))
+  #time_wide = pl.arange(0,len(signal_wide)/INTERP_FREQ,1.0/INTERP_FREQ)
+  #signal_wide[:len(signal)] = signal
+  #signal = signal_wide
+  #time = time_wide
   n = len(signal)
 
-  #window = pl.hanning(n) # window
-  signal_wed = signal
-  # * window
+  window = pl.hanning(n) # window
+  signal_wed = signal * window
 
-  spec = pl.fftshift(anfft.fft(signal_wed)) # entering to frequency domain
+  spec = pl.fftshift(pl.fft(signal_wed)) # entering to frequency domain
   spec_filt = pl.zeros(spec.shape,dtype=complex)
   # fftshift moves zero-frequency component 
   # to the center of the array
@@ -87,12 +85,13 @@ def fft_filter(time, signal, result, freq_limit = (0.004, 0.04)):
       freq_filt[i] = 0 # fill invalid frequencies with small value
       spec_filt[i] = 0
 
-  signal_filt = abs(anfft.ifft(pl.ifftshift(spec_filt))) # get filtered signal
-  signal_filt_uwed = signal_filt
-  # / window
+  signal_filt = pl.absolute(pl.ifft(pl.ifftshift(spec_filt))) # get filtered signal
+  signal_filt_uwed = signal_filt * window * (1-window)
+  #signal_filt_uwed = signal_filt_uwed[:len(time)]
+  #signal = signal[:len(time)]
  
-  spec_abs = abs(spec)[n/2:n] # half of absolute spectra for orig signal
-  spec_filt_abs = abs(spec_filt)[n/2:n] # half of absolute spectra for filt signal
+  spec_abs = pl.absolute(spec)[n/2:n] # half of absolute spectra for orig signal
+  spec_filt_abs = pl.absolute(spec_filt)[n/2:n] # half of absolute spectra for filt signal
   freq_abs = freq[n/2:n] # half of absolute freqs axis for orig signal
   freq_filt_abs = freq_filt[n/2:n] # half of absolute freqs axis for filt signal
 
@@ -129,7 +128,7 @@ def fft_filter(time, signal, result, freq_limit = (0.004, 0.04)):
   sp_sig_filt.set_title("Filtered signal")
   sp_sig_filt.set_xlabel(r"Time, s")
   sp_sig_filt.set_ylabel(r"HRV, ms")
-  sp_sig_filt.set_ylim(min(signal_filt),max(signal_filt))
+  #sp_sig_filt.set_ylim(min(signal_filt_uwed),max(signal_filt_uwed))
   sp_sig_filt.plot(time, signal_filt_uwed)
   
   sp_spec_filt = pl.subplot(224, sharex=sp_spec, sharey=sp_spec)
@@ -143,7 +142,8 @@ def fft_filter(time, signal, result, freq_limit = (0.004, 0.04)):
 
   #draw(freq_filt_log, spec_filt_log)
 
-  #pl.show()
+  if result['frag'] == 1:
+    pl.show()
   #exit(0)
   
   pl.savefig("bandpass_%(record)s_%(frag)s.png" % result, facecolor='w', edgecolor='k', transparent=True)
@@ -469,11 +469,11 @@ def interpolate(x, y):
     """
 
     xnew = pl.arange(x.min(), x.max(), 1.0/INTERP_FREQ, dtype='float32')
-    tck = splrep(x, y, s=0)
-    ynew = splev(xnew,tck,der=0)
-    return xnew, ynew
-    #f2 = interp1d(x, y, kind='linear')
-    #return xnew, f2(xnew)
+    #tck = splrep(x, y, s=0)
+    #ynew = splev(xnew,tck,der=0)
+    #return xnew, ynew
+    f = interp1d(x, y, kind='linear')
+    return xnew, f(xnew)
     #return x,yrn x,y
 
 
@@ -491,8 +491,8 @@ def process_part(record, annotator, diagnosis=None, start=0, end=-1):
   ann_x = (ann[:, 0] - data[0, 0]).astype('int')
   
   time, hrv = variability(ann[:,1])
-  #time_interp, hrv_interp = interpolate(time, hrv)
-  time_interp, hrv_interp = (time, hrv)
+  time_interp, hrv_interp = interpolate(time, hrv)
+  #time_interp, hrv_interp = (time, hrv)
   #plot_signals(data, info, time, hrv, time_interp, hrv_interp, ann)
   #exit(0)
 
@@ -591,10 +591,12 @@ if __name__ == '__main__':
     #for signal in chf.split('  '):
     #  process_signal(signal, "CHF")
   else:
-    signals = ['chf03.ecg', 'chf04.ecg']
+    #signals = ['16483.atr', '16773.atr']
     #signals = ['16273.atr', '16272.atr']
+    #signals = ['chf03.ecg', 'chf04.ecg']
+    signals = ['chf05.ecg', 'chf06.ecg']
     for signal in signals:
-      process_signal(signal, "CHF")
+      process_signal(signal, "No deseases")
 
   
     
