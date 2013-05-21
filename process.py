@@ -375,18 +375,16 @@ def variability(r_times, valid_rr_ratio=VALID_RR_RATIO):
   last_rr = 0
   time[0] = 0
   for i in range(1, len(r_times)):
-    if last_rr:
-      rr = r_times[i]-r_times[i-1]
+    rr = r_times[i]-r_times[i-1]
+    if last_rr: # if first rr computed, go with validation
       if abs(last_rr / rr - 1) <= valid_rr_ratio: # current rr differs less then 20% of previous one
         rrs[i] = rr
-        last_rr = rr
       else:
         rrs[i] = 0
         time[i] = 0
-    else:
-      rr = r_times[i]-r_times[i-1]
+    else: # no rrs computed yet. need first for validation to work
       rrs[i] = rr
-      last_rr = rr
+    last_rr = rr
 
   rrs = pl.ma.masked_equal(rrs,0)
   rrs = pl.ma.compressed(rrs)
