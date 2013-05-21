@@ -1,19 +1,17 @@
 #!/usr/bin/env python
 import pylab as pl
 from wfdbtools import rdsamp, rdann, plot_data
-#from pprint import pprint
 from sys import exit
-#import math
-#from scipy.signal import fftconvolve
-#import anfft
 import datetime as dt
-#import numpy as np
-#from scipy import interpolate
 from scipy.interpolate import interp1d,splrep,splev
-#import time
 
-WINDOW = 3072
-INTERP_FREQ = 8
+
+WINDOW = 4096 # should be 2**x
+INTERP_FREQ = 8 # should be 2**x
+INTERP_KIND = 'cubic' # linear/cubic
+FREQ_LIMIT = (0.0033, 0.4) # (min_freq, max_freq)
+BETA_LIMIT = (0.5, 1.5) # used to be 0.5 < beta < 1.5
+VALID_RR_RATIO = 0.2 # 0 < x < 1
 
 
 def results_to_csv(results,record,info,diagnosis="?"):
@@ -35,7 +33,7 @@ def signal_to_csv(record,time,hrv,info):
     outfile.write(line)
   outfile.close()
 
-def fft_filter(time, signal, result, freq_limit = (0.0033, 0.4)):
+def fft_filter(time, signal, result, freq_limit = FREQ_LIMIT, preview=False):
   """
    Applies an Band Pass filter to signal in the frequency domain and plots
       signals and their spectrals.
@@ -65,6 +63,7 @@ def fft_filter(time, signal, result, freq_limit = (0.0033, 0.4)):
   #signal_wide[:len(signal)] = signal
   #signal = signal_wide
   #time = time_wide
+
   n = len(signal)
 
   window = pl.hanning(n) # window
@@ -142,8 +141,8 @@ def fft_filter(time, signal, result, freq_limit = (0.0033, 0.4)):
 
   #draw(freq_filt_log, spec_filt_log)
 
-  if result['frag'] == 1:
-    pl.show()
+  if preview and result['frag'] == 1:
+     pl.show()
   #exit(0)
   
   pl.savefig("bandpass_%(record)s_%(frag)s.png" % result, facecolor='w', edgecolor='k', transparent=True)
@@ -359,7 +358,7 @@ def plot_beta(freq, fft, aprox_y, result):
 #   pl.savefig(fname,facecolor='w',edgecolor='k',transparent=True)
 #   pl.close()
 
-def variability(r_times):
+def variability(r_times, valid_rr_ratio=VALID_RR_RATIO):
   """
   Get HRV from RR times array.
   Parameters:
@@ -378,7 +377,7 @@ def variability(r_times):
   for i in range(1, len(r_times)):
     if last_rr:
       rr = r_times[i]-r_times[i-1]
-      if abs(last_rr / rr - 1) <= 0.2: # current rr differs less then 20% of previous one
+      if abs(last_rr / rr - 1) <= valid_rr_ratio: # current rr differs less then 20% of previous one
         rrs[i] = rr
         last_rr = rr
       else:
@@ -459,7 +458,7 @@ def plot_signals(data, info, hrv_time, hrv_data, hrv_interp_time, hrv_interp_dat
     pl.close()
 
 
-def interpolate(x, y):
+def interpolate(x, y, kind='linear'):
     """
     Interpolates x/y using cubic interpolation
     In:
@@ -467,17 +466,20 @@ def interpolate(x, y):
     Out:
       xnew, ynew : ndarray, Interpolated data
     """
-
     xnew = pl.arange(x.min(), x.max(), 1.0/INTERP_FREQ, dtype='float32')
-    #tck = splrep(x, y, s=0)
-    #ynew = splev(xnew,tck,der=0)
-    #return xnew, ynew
-    f = interp1d(x, y, kind='linear')
-    return xnew, f(xnew)
-    #return x,yrn x,y
+    if kind == 'linear':
+      f = interp1d(x, y, kind='linear')
+      ynew = f(xnew)
+    elif kind == 'cubic':
+      tck = splrep(x, y, s=0)
+      ynew = splev(xnew, tck, der=0)
+    else:
+      raise BaseException("Interpolation kind not supported")
+      return
+    return xnew, ynew
 
 
-def process_part(record, annotator, diagnosis=None, start=0, end=-1):
+def process_part(record, annotator, diagnosis=None, start=0, end=-1, beta_limit=BETA_LIMIT):
   # Read in the data from 0 to 10 seconds
   # rdsamp(record, start=0, end=-1, interval=-1)
   data, info = rdsamp(record, start, end)
@@ -491,7 +493,7 @@ def process_part(record, annotator, diagnosis=None, start=0, end=-1):
   ann_x = (ann[:, 0] - data[0, 0]).astype('int')
   
   time, hrv = variability(ann[:,1])
-  time_interp, hrv_interp = interpolate(time, hrv)
+  time_interp, hrv_interp = interpolate(time, hrv, INTERP_KIND)
   #time_interp, hrv_interp = (time, hrv)
   #plot_signals(data, info, time, hrv, time_interp, hrv_interp, ann)
   #exit(0)
@@ -513,7 +515,7 @@ def process_part(record, annotator, diagnosis=None, start=0, end=-1):
 
     frag_beg = frag * INTERP_FREQ * WINDOW
     frag_end = (frag+1) * INTERP_FREQ * WINDOW
-    
+
     if "base_time" in info:
       r_first_full = info['base_time'] + \
           dt.timedelta(seconds=float(time_interp[frag_beg]))
@@ -540,7 +542,7 @@ def process_part(record, annotator, diagnosis=None, start=0, end=-1):
     line_y = [_a*x+_b for x in freq_filt]
     plot_beta(freq_filt,fft_filt,line_y,result)
 
-    if 0.2 <= result['beta'] and result['beta'] <= 1.5:
+    if beta_limit[0] <= result['beta'] and result['beta'] <= beta_limit[1]:
       results.append(result)
       print "%(frag)02d/%(frag_count)02d: %(time_from)s - %(time_to)s\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % dict(result.items()+{'frag_count':frag_count}.items())
     
@@ -555,8 +557,8 @@ def stats(results):
   medians = means.copy()
   stdevs = means.copy()
   for param in means.keys():
-    maxs[param] = max([v[param] for v in results])
     mins[param] = min([v[param] for v in results])
+    maxs[param] = max([v[param] for v in results])
     means[param] = pl.mean([v[param] for v in results])
     medians[param] = pl.median([v[param] for v in results])
     stdevs[param] = pl.std([v[param] for v in results])
@@ -569,6 +571,9 @@ def stats(results):
 def process_signal(ann_file_name, diagnosis=None):
     (record, annotator) = ann_file_name.split('.')
     info, results = process_part(record, annotator, diagnosis)
+    if not results:
+      print "No results"
+      return
     stats(results)
     results_to_csv(results, record, info)
     #plot_beta_std(results, "std_%s.png" % (record, ))
@@ -581,22 +586,23 @@ if __name__ == '__main__':
   #signals = ['chf03 ecg', 'chf04 ecg']
   batch = False
   if batch:
-    health = '16265.atr  16273.atr  16483.atr  16773.atr  16795.atr  17453.atr  18184.atr  19090.atr  19140.atr  16272.atr  16420.atr  16539.atr  16786.atr  17052.atr  18177.atr  19088.atr  19093.atr  19830.atr'
-    for signal in health.split('  '):
-      process_signal(signal, 'No deseases')
+    #health = '16265.atr  16273.atr  16483.atr  16773.atr  16795.atr  17453.atr  18184.atr  19090.atr  19140.atr  16272.atr  16420.atr  16539.atr  16786.atr  17052.atr  18177.atr  19088.atr  19093.atr  19830.atr'
+    #for signal in health.split('  '):
+    #  process_signal(signal, 'No deseases')
     #hypert = 's20031.atr  s20121.atr  s20221.atr  s20471.atr  s20551.atr  s20651.atr  s30691.atr  s30751.atr  s30791.atr  s20051.atr  s20131.atr  s20341.atr  s20481.atr  s20561.atr  s30661.atr  s30741.atr  s30752.atr  s30801.atr  s20101.atr  s20171.atr  s20411.atr  s20501.atr  s20581.atr  s30681.atr  s30742.atr  s30761.atr'
-    #for signal in hypert.split('  '):
-    #  process_signal(signal, "Hypetension")
-    #chf = 'chf01.ecg  chf03.ecg  chf05.ecg  chf07.ecg  chf09.ecg  chf11.ecg  chf13.ecg  chf15.ecg  chf02.ecg  chf04.ecg  chf06.ecg  chf08.ecg  chf10.ecg  chf12.ecg  chf14.ecg'
-    #for signal in chf.split('  '):
-    #  process_signal(signal, "CHF")
+    hypert = 's20471.atr  s20551.atr  s20651.atr  s30691.atr  s30751.atr  s30791.atr  s20051.atr  s20131.atr  s20341.atr  s20481.atr  s20561.atr  s30661.atr  s30741.atr  s30752.atr  s30801.atr  s20101.atr  s20171.atr  s20411.atr  s20501.atr  s20581.atr  s30681.atr  s30742.atr  s30761.atr'
+    for signal in hypert.split('  '):
+     process_signal(signal, "Hypetension")
+    chf = 'chf01.ecg  chf03.ecg  chf05.ecg  chf07.ecg  chf09.ecg  chf11.ecg  chf13.ecg  chf15.ecg  chf02.ecg  chf04.ecg  chf06.ecg  chf08.ecg  chf10.ecg  chf12.ecg  chf14.ecg'
+    for signal in chf.split('  '):
+     process_signal(signal, "CHF")
   else:
-    #signals = ['16483.atr', '16773.atr']
+    signals = ['16483.atr', '16773.atr']
     #signals = ['16273.atr', '16272.atr']
     #signals = ['chf03.ecg', 'chf04.ecg']
-    signals = ['chf05.ecg', 'chf06.ecg']
+    #signals = ['chf05.ecg', 'chf06.ecg']
     for signal in signals:
-      process_signal(signal, "No deseases")
+      process_signal(signal, "CHF")
 
   
     
