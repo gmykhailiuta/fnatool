@@ -252,11 +252,12 @@ def rdann(record, annotator, start=0, end=-1, types=[]):
     # limit to requested interval
     start, end = _get_read_limits(start, end, -1, info)
     ann = numpy.array([annot_time, annot_time_ms, annot]).transpose()
-    
+
     # filter by annot_time in interval
     ann =  ann[start <= ann[:, 0]]
-    ann = ann[ann[:, 0] <= end]
-
+    if end:
+        ann = ann[ann[:, 0] <= end]
+    
     # filter by type
     if types != []:
         ann = ann[numpy.logical_or.reduce([ann[:, 2] == x for x in types])]
@@ -389,29 +390,30 @@ def rdhdr(record):
     if base_date != '':
         info['base_date'] = dt.datetime.strptime(base_date, '%d/%m/%Y')
     
-    for sig in range(2):
-        (file_name, file_format, samp_per_frame, skew,
-         byte_offset, gain, baseline, units,
-         resolution, zero_value, first_value,
-         checksum, blocksize, signal_name) = SIGNAL_REGEX.findall(
-                                             header_lines[sig+1])[0]
+    if len(header_lines) > 1:
+        for sig in range(2):
+            (file_name, file_format, samp_per_frame, skew,
+             byte_offset, gain, baseline, units,
+             resolution, zero_value, first_value,
+             checksum, blocksize, signal_name) = SIGNAL_REGEX.findall(
+                                                 header_lines[sig+1])[0]
 
-        # replace with defaults for missing values
-        if gain == '' or gain == 0:
-            gain = 200
-        if units == '':
-            units = 'mV'
-        if zero_value == '':
-            zero_value = 0
-        if first_value == '':
-            first_value = 0   # do not use to check
+            # replace with defaults for missing values
+            if gain == '' or gain == 0:
+                gain = 200
+            if units == '':
+                units = 'mV'
+            if zero_value == '':
+                zero_value = 0
+            if first_value == '':
+                first_value = 0   # do not use to check
 
-        
-        info['gains'].append(float(gain))
-        info['units'].append(units)
-        info['zero_values'].append(float(zero_value))
-        info['first_values'].append(float(first_value))
-        info['signal_names'].append(signal_name)
+            
+            info['gains'].append(float(gain))
+            info['units'].append(units)
+            info['zero_values'].append(float(zero_value))
+            info['first_values'].append(float(first_value))
+            info['signal_names'].append(signal_name)
 
 	
     (age, gender, diagnosis) = DESC_REGEX.findall(comment_lines[0])[0]
@@ -482,6 +484,7 @@ def _get_read_limits(start, end, interval, info):
     if interval_end < start:
         interval_end = info['samp_count']
     end = min(end, interval_end, info['samp_count']) # use earlier end
+    
     return int(start), int(end)
             
 def _read_data(record, start, end, info):

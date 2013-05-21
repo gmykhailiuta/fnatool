@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 import pylab as pl
-from wfdbtools import rdsamp, rdann, plot_data
+from wfdbtools import rdhdr, rdann, plot_data
 from sys import exit
 import datetime as dt
 from scipy.interpolate import interp1d,splrep,splev
-
+from pprint import pprint
 
 WINDOW = 4096 # should be 2**x
 INTERP_FREQ = 8 # should be 2**x
@@ -33,7 +33,7 @@ def signal_to_csv(record,time,hrv,info):
     outfile.write(line)
   outfile.close()
 
-def fft_filter(time, signal, result, freq_limit = FREQ_LIMIT, preview=False):
+def fft_filter(time, signal, result, samp_freq=INTERP_FREQ, freq_limit = FREQ_LIMIT, preview=False):
   """
    Applies an Band Pass filter to signal in the frequency domain and plots
       signals and their spectrals.
@@ -73,7 +73,7 @@ def fft_filter(time, signal, result, freq_limit = FREQ_LIMIT, preview=False):
   spec_filt = pl.zeros(spec.shape,dtype=complex)
   # fftshift moves zero-frequency component 
   # to the center of the array
-  freq = pl.fftshift(pl.fftfreq(n, 1.0/INTERP_FREQ)) # get freqs axis values
+  freq = pl.fftshift(pl.fftfreq(n, 1.0/samp_freq)) # get freqs axis values
   freq_filt = pl.zeros(freq.shape,dtype=float) # same for filtered
 
   for i in range(n):  # filter by frequency
@@ -404,7 +404,7 @@ get betas for sleeping|unsleeping periods - mark them "S"|"US"
 compare betas depending on hour - plot beta by time
 """
 
-def plot_signals(data, info, hrv_time, hrv_data, hrv_interp_time, hrv_interp_data, ann=None):
+def plot_signals(info, hrv_time, hrv_data, hrv_interp_time, hrv_interp_data, ann=None):
     """
     Plot the signals HRV.
 
@@ -425,35 +425,36 @@ def plot_signals(data, info, hrv_time, hrv_data, hrv_interp_time, hrv_interp_dat
     """
     #window = range(10000)
 
-    time = data[:, 1] #in seconds. use data[:, 0] to use sample no.
-    sig1 = data[:, 2]
-    sig2 = data[:, 3]
+    #time = data[:, 1] #in seconds. use data[:, 0] to use sample no.
+    #sig1 = data[:, 2]
+    #sig2 = data[:, 3]
 
     
     fig = pl.figure("signals")
-    sp1 = pl.subplot(311)
-    pl.plot(time, sig1, '-')
-    pl.ylabel('%s (mV)' %(info['signal_names'][0]))
+    #sp1 = pl.subplot(311)
+    #pl.plot(time, sig1, '-')
+    #pl.ylabel('%s (mV)' %(info['signal_names'][0]))
     
-    pl.subplot(312, sharex=sp1)
-    pl.plot(time, sig2, 'k')
-    pl.ylabel('%s (mV)' %(info['signal_names'][1])) 
+    #pl.subplot(312, sharex=sp1)
+    #pl.plot(time, sig2, 'k')
+    #pl.ylabel('%s (mV)' %(info['signal_names'][1])) 
 
-    if ann != None:
+    #if ann != None:
         #ann = ann[window]
         # annotation time in samples from start
-        ann_x = (ann[:, 0] - data[0, 0]).astype('int')
-        pl.plot(ann[:, 1], data[ann_x, 3], 'xr')
-        pl.subplot(311)
-        pl.plot(ann[:, 1], data[ann_x, 2], 'xr')
+        #ann_x = (ann[:, 0] - data[0, 0]).astype('int')
+    #sp1 = pl.subplot(211)
+    #pl.plot(hrv_time, ann[:, 1], 'xr')
+    #pl.ylabel('RR') 
 
-    pl.subplot(313, sharex=sp1)
-    pl.plot(hrv_time, hrv_data, '.')
-    pl.xlim(sp1.get_xlim()) 
+    sp1 = pl.subplot(211)
+    pl.plot(hrv_time, hrv_data, 'x')
+    #pl.xlim(sp1.get_xlim()) 
     pl.ylabel('HRV (s)') 
-    pl.plot(hrv_interp_time, hrv_interp_data, 'k-',ls='dotted')
+    pl.subplot(212)
+    pl.plot(hrv_interp_time, hrv_interp_data, 'k',ls='dotted')
     pl.xlabel('Time (s)')
-    sp1.set_xlim(0,1000)
+    #sp1.set_xlim(0,1000)
     pl.show()
     pl.close()
 
@@ -482,20 +483,21 @@ def interpolate(x, y, kind='linear'):
 def process_part(record, annotator, diagnosis=None, start=0, end=-1, beta_limit=BETA_LIMIT):
   # Read in the data from 0 to 10 seconds
   # rdsamp(record, start=0, end=-1, interval=-1)
-  data, info = rdsamp(record, start, end)
+  info = rdhdr(record)
   if diagnosis:
     info['diagnosis'] = diagnosis
   print "Processing %s: %s %s %s" % (record, info['gender'], info['age'], info['diagnosis'])
   
   # rdann(record, annotator, start=0, end=-1, types=[])
-  ann = rdann(record, annotator, start, end)
+  ann = rdann(record, annotator, start, end, [1])
   # annotation time in samples from start
-  ann_x = (ann[:, 0] - data[0, 0]).astype('int')
-  
+  #ann_x = (ann[:, 0] - data[0, 0]).astype('int')
+
   time, hrv = variability(ann[:,1])
+  draw(time)
   time_interp, hrv_interp = interpolate(time, hrv, INTERP_KIND)
   #time_interp, hrv_interp = (time, hrv)
-  #plot_signals(data, info, time, hrv, time_interp, hrv_interp, ann)
+  plot_signals(info, time, hrv, time_interp, hrv_interp, ann)
   #exit(0)
 
   #signal_to_csv(record, time, hrv, info)
@@ -515,6 +517,7 @@ def process_part(record, annotator, diagnosis=None, start=0, end=-1, beta_limit=
 
     frag_beg = frag * INTERP_FREQ * WINDOW
     frag_end = (frag+1) * INTERP_FREQ * WINDOW
+    #print frag_beg, frag_end, len(time_interp)
 
     if "base_time" in info:
       r_first_full = info['base_time'] + \
@@ -597,12 +600,13 @@ if __name__ == '__main__':
     for signal in chf.split('  '):
      process_signal(signal, "CHF")
   else:
-    signals = ['16483.atr', '16773.atr']
+    #signals = ['16483.atr', '16773.atr']
     #signals = ['16273.atr', '16272.atr']
     #signals = ['chf03.ecg', 'chf04.ecg']
     #signals = ['chf05.ecg', 'chf06.ecg']
+    signals = ['nsr001.ecg']
     for signal in signals:
-      process_signal(signal, "CHF")
+      process_signal(signal, "Normal")
 
   
     
