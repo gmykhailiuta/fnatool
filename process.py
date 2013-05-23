@@ -27,7 +27,7 @@ Do not use pylab (or fix case if using Gtk)
 
 WINDOW = 4096 # should be 2**x
 INTERP_FREQ = 4 # should be 2**x
-INTERP_KIND = 'linear' # linear/cubic
+INTERP_KIND = 'spline' # linear/cubic
 FREQ_LIMIT = (0.0033, 0.04) # (min_freq, max_freq)
 BETA_LIMIT = (0.2, 1.8) # used to be 0.5 < beta < 1.5
 VALID_RR_RATIO = 0.2 # 0 < x < 1
@@ -267,8 +267,8 @@ def interpolate(x, y, kind='linear'):
     if kind == 'linear':
       f = interp1d(x, y, kind='linear')
       ynew = f(xnew)
-    elif kind == 'cubic':
-      tck = splrep(x, y, s=0)
+    elif kind == 'spline':
+      tck = splrep(x, y, k=1)
       ynew = splev(xnew, tck, der=0)
     else:
       raise BaseException("Interpolation kind not supported")
