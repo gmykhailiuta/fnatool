@@ -26,19 +26,16 @@ Do not use pylab (or fix case if using Gtk)
 """
 
 WINDOW = 4096 # should be 2**x
-INTERP_FREQ = 4 # should be 2**x
-INTERP_KIND = 'spline' # linear/cubic
+INTERP_FREQ = 32 # should be 2**x
+SPLINE_ORDER = 2 # The order of the spline fit. 1 <= k <= 5
 FREQ_LIMIT = (0.0033, 0.04) # (min_freq, max_freq)
 BETA_LIMIT = (0.2, 1.8) # used to be 0.5 < beta < 1.5
 VALID_RR_RATIO = 0.2 # 0 < x < 1
 SLIDE_RATE = 1 # 0 < x < 1
 
-def results_to_csv(results,record,info,diagnosis="?"):
+def results_to_csv(results,record,info):
   outfile = open("results_%s.csv" % (record,), "w")
-  if 'diagnosis' in info:
-    diagnosis = info['diagnosis']
-
-  outfile.write("%s,%s,%s,%s\n" % (record, info['gender'], info['age'], diagnosis))
+  outfile.write("%s,%s,%s,%s\n" % (record, info['gender'], info['age'], info['diagnosis']))
   for r in results:
     outfile.write("%(time_from)s,%(time_to)s,%(beta)s,%(std)s,%(cov)s,%(mean)s\n" % r)
   outfile.close()
@@ -246,16 +243,16 @@ def plot_hrv(hrv, hrv_interp, preview=False):
             Interpolated time & hrv vectors
     """
     fig = pl.figure("signals")
-    pl.plot(hrv[0], hrv[1], 'x')
+    pl.plot(hrv[0], hrv[1], 'or')
     pl.ylabel('HRV (s)') 
-    pl.plot(hrv_interp[0], hrv_interp[1], 'k',ls='dotted')
+    pl.plot(hrv_interp[0], hrv_interp[1], 'k')
     pl.xlabel('Time (s)')
     if preview:
         pl.show()
     pl.close()
 
 
-def interpolate(x, y, kind='linear'):
+def interpolate(x, y, k=SPLINE_ORDER):
     """
     Interpolates x/y using cubic interpolation
     In:
@@ -264,15 +261,8 @@ def interpolate(x, y, kind='linear'):
       xnew, ynew : ndarray, Interpolated data
     """
     xnew = pl.arange(x.min(), x.max(), 1.0/INTERP_FREQ, dtype='float32')
-    if kind == 'linear':
-      f = interp1d(x, y, kind='linear')
-      ynew = f(xnew)
-    elif kind == 'spline':
-      tck = splrep(x, y, k=1)
-      ynew = splev(xnew, tck, der=0)
-    else:
-      raise BaseException("Interpolation kind not supported")
-      return
+    tck = splrep(x, y, k=k, s=0)
+    ynew = splev(xnew, tck, der=0)
     return xnew, ynew
 
 
@@ -287,7 +277,7 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1, slide_rat
   ann = rdann(record, annotator, start, end, [1])
   
   time, hrv = variability(ann[:,1]-ann[0,1])
-  time_interp, hrv_interp = interpolate(time, hrv, INTERP_KIND)
+  time_interp, hrv_interp = interpolate(time, hrv)
 
   if preview:
     plot_hrv([time, hrv], [time_interp, hrv_interp], preview=preview)
@@ -297,9 +287,9 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1, slide_rat
   window = INTERP_FREQ * WINDOW
 
   if window % 2 != 0:
-    warn("Window is not even. Adjust INTERP_FREQ and/or WINDOW parameters to be x**2")
-  if window and not window & (window - 1):
-    warn("Window is not power of 2. Adjust INTERP_FREQ and/or WINDOW parameters")
+    warn("Window (%s) is not even. Adjust INTERP_FREQ and/or WINDOW parameters to be x**2" % (window, ))
+  if not (window != 0 and ((window & (window - 1)) == 0)):
+    warn("Window (%s) is not power of 2. Adjust INTERP_FREQ and/or WINDOW parameters" % (window, ))
   frag_count = int(len(time_interp) / INTERP_FREQ / WINDOW)
   results = []
   for frag in range(0, frag_count): # get WINDOW secs exactly
@@ -348,7 +338,7 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1, slide_rat
       print "%(frag)02d/%(frag_count)02d: %(time_from)s - %(time_to)s\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % dict(result.items()+{'frag_count':frag_count}.items())
   if results:
     stats(results)
-    results_to_csv(results, record, info, preview=preview)
+    results_to_csv(results, record, info)
     plot_beta_std(results, preview=preview)
     plot_beta_cv(results, preview=preview)
   else:
