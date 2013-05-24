@@ -2,6 +2,7 @@
 import pylab as pl
 from pprint import pprint
 from scipy.cluster.vq import kmeans2
+from warnings import warn
 import itertools
 import common
 
@@ -15,7 +16,7 @@ def draw(in1,in2=None,label="",show=False):
         pl.show()
     exit(0)
 
-def plot_hrv(hrv, hrv_interp, preview=False):
+def plot_hrv(hrv, hrv_interp, record, preview=False):
     """
     Plot HRV and it's approximation.
     In:
@@ -26,6 +27,7 @@ def plot_hrv(hrv, hrv_interp, preview=False):
     """
     fig = pl.figure("signals")
     pl.plot(hrv[0], hrv[1], 'or')
+    pl.title(record)
     pl.ylabel('HRV (s)') 
     pl.plot(hrv_interp[0], hrv_interp[1], 'k')
     pl.xlabel('Time (s)')
@@ -222,14 +224,14 @@ def plot_clusters(preview=False):
     pl.subplots_adjust(left=0.06, right=0.95, top=0.9, bottom=0.1)
     pl.savefig("clusterisation.png",facecolor='w',edgecolor='k',transparent=True)
 
-    std, beta = common.filter2d(stat[1], stat[0], 1)
+    std, beta = common.filter2d(stat[1], stat[0], '2sigma')
     res, idx = kmeans2(pl.array(zip(std, beta)),len(common.SIGNALS))
     colors = ([([0.4,1,0.4],[1,0.4,0.4],[0.1,0.8,1])[i] for i in idx])
     sp_beta_std.scatter(std, beta, c=colors)
     sp_beta_std.scatter(res[:,0],res[:,1], marker='o', s = 500, linewidths=2, c='none')
     sp_beta_std.scatter(res[:,0],res[:,1], marker='x', s = 500, linewidths=2, c='k')
 
-    cov, beta = common.filter2d(stat[2], stat[0], 1)
+    cov, beta = common.filter2d(stat[2], stat[0], '2sigma')
     res, idx = kmeans2(pl.array(zip(cov, beta)),len(common.SIGNALS))
     colors = ([([0.4,1,0.4],[1,0.4,0.4],[0.1,0.8,1])[i] for i in idx])
     sp_beta_cov.scatter(cov, beta, c=colors)    
@@ -286,12 +288,11 @@ def plot_homeostasis_interp(preview=False):
         pl.savefig("stochastic_homeostasis_diagnosis_interp_%s.png" % (db['diagnosis'],),facecolor='w',edgecolor='k',transparent=True)
         if preview:
             pl.show()
-
-    pl.close()
+        pl.close()
 
 
 if __name__ == '__main__':
-    #plot_homeostasis(True)
+    plot_homeostasis()
     #boxplot_diagnosis()
-    #plot_clusters(True)
-    plot_homeostasis_interp(True)
+    #plot_clusters()
+    #plot_homeostasis_interp()

@@ -12,7 +12,7 @@ SIGNALS = [
       'plot_color': 'r',
       'records': 'chf01 chf03 chf05 chf07 chf09 chf11 chf13 chf15 chf02 chf04 chf06 chf08 chf10 chf12 chf14'},
     {'diagnosis': 'Hypertension',
-      'annotator': 'ecg',
+      'annotator': 'atr',
       'plot_color': 'b',
       'records': 's20031 s20121 s20221 s20471 s20551 s20651 s30691 s30751 s30791 s20051 s20131 s20341 s20481 s20561 s30661 s30741 s30752 s30801 s20101 s20171 s20411 s20501 s20581 s30681 s30742 s30761'
     }]
@@ -45,10 +45,10 @@ def read_signal(file_name=None):
     return result
 
 
-def filter2d(x, y, filtration_algo=1, valid_delta_ratio=.2):
+def filter2d(x, y, filtration_algo='2sigma', valid_delta_ratio=.2):
     xnew = pl.array(x, dtype='float32')
     ynew = pl.array(y, dtype='float32')
-    if filtration_algo == 0:
+    if filtration_algo == 'rate20':
         for i in range(0, len(ynew)-1):
             if (abs(ynew[i+1] / ynew[i] - 1) > valid_delta_ratio): # current rr differs more then 20% of previous one
                 ynew[i] = 0
@@ -57,7 +57,7 @@ def filter2d(x, y, filtration_algo=1, valid_delta_ratio=.2):
         ynew = pl.ma.compressed(ynew)
         xnew = pl.ma.masked_equal(xnew,0)
         xnew = pl.ma.compressed(xnew)
-    elif filtration_algo == 1:
+    elif filtration_algo == '2sigma':
         mean = pl.mean(ynew)
         std = pl.std(ynew)
       
@@ -71,7 +71,7 @@ def filter2d(x, y, filtration_algo=1, valid_delta_ratio=.2):
         xnew = pl.ma.masked_equal(xnew,0)
         xnew = pl.ma.compressed(xnew)
 
-    elif filtration_algo == 1:
+    elif filtration_algo == 'rate20_2sigma':
         for i in range(0, len(ynew)-1):
             if (abs(ynew[i+1] / ynew[i] - 1) > valid_delta_ratio): # current rr differs more then 20% of previous one
                 ynew[i] = 0
@@ -103,3 +103,4 @@ def signal_to_csv(record,time,hrv,info):
         line = "%s %s %s\n" % (i+1,t_full.strftime("%H:%M:%S.%f"),hrv[i])
         outfile.write(line)
     outfile.close()
+

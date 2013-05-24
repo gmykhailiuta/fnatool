@@ -37,7 +37,7 @@ BETA_LIMIT = (0., 2.) # used to be 0.5 < beta < 1.5
 SLIDE_RATE = .2 # 0 < x < 1
 FFT_WINDOW_FUNC = pl.hanning
 VALID_RR_RATIO = 0.2 # 0 < x < 1
-HRV_FILTER_ALGO = 1 # 0 - old, rr_last / rr - 1 < 0.2; 1 - new, mean - 2 std < rr < mean + 2 std
+HRV_FILTER_ALGO = '2sigma' # 0 - old, rr_last / rr - 1 < 0.2; 1 - new, mean - 2 std < rr < mean + 2 std
 
 
 def _variability(r_times, filtration_algo=HRV_FILTER_ALGO, valid_rr_ratio=VALID_RR_RATIO):
@@ -144,12 +144,16 @@ def variability(r_times):
         rrs : ndarray
             HRV vector
     """
-    
+
     hrv = pl.zeros(len(r_times)-1, dtype='float32')
-    time = pl.array(r_times, dtype='float32')
+    time = r_times.copy()
 
     for i in range(0, len(r_times)-1):
         hrv[i] = (r_times[i+1]-r_times[i])* 1000
+    
+    #if len(time) > len(hrv):
+    #    hrv[-1] = 0
+    #print pl.shape(r_times), pl.shape(time),pl.shape(hrv)
     return time, hrv
 
 
@@ -161,6 +165,8 @@ def interpolate(x, y, k=SPLINE_ORDER):
     Out:
         xnew, ynew : ndarray, Interpolated data
     """
+    assert pl.shape(x) == pl.shape(y)
+
     xnew = pl.arange(x.min(), x.max(), 1.0/INTERP_FREQ, dtype='float32')
     tck = splrep(x, y, k=k, s=0)
     ynew = splev(xnew, tck, der=0)
@@ -280,95 +286,95 @@ def approximate(x,y):
 
 def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
                    slide_rate=SLIDE_RATE, beta_limit=BETA_LIMIT, preview=False):
-  # rdsamp(record, start=0, end=-1, interval=-1)
-  info = rdhdr(record)
-  if diagnosis:
-    info['diagnosis'] = diagnosis
-  print "Processing %s: %s %s %s" % (record, info['gender'], info['age'], info['diagnosis'])
+    # rdhdr(record)
+    info = rdhdr(record)
+    if diagnosis:
+        info['diagnosis'] = diagnosis
+    print "Processing %s: %s %s %s" % (record, info['gender'], info['age'], info['diagnosis'])
   
-  # rdann(record, annotator, start=0, end=-1, types=[])
-  ann = rdann(record, annotator, start, end, [1])
+    # rdann(record, annotator, start=0, end=-1, types=[])
+    ann = rdann(record, annotator, start, end, [1])
   
-  time, hrv = variability(ann[:,1]-ann[0,1])
-  time, hrv = common.filter2d(time, hrv)
-  time_interp, hrv_interp = interpolate(time, hrv)
+    time, hrv = variability(ann[:,1]-ann[0,1])
+    time, hrv = common.filter2d(time, hrv, filtration_algo=HRV_FILTER_ALGO)
+    time_interp, hrv_interp = interpolate(time, hrv)
 
-  if preview:
-    plot_results.plot_hrv([time, hrv], [time_interp, hrv_interp], preview=preview)
+    if preview:
+        plot_results.plot_hrv([time, hrv], [time_interp, hrv_interp], record, preview=preview)
 
-  #signal_to_csv(record, time, hrv, info)
+    #signal_to_csv(record, time, hrv, info)
   
-  window = INTERP_FREQ * WINDOW
+    window = INTERP_FREQ * WINDOW
 
-  if window % 2 != 0:
-    warn("Window (%s) is not even. Adjust INTERP_FREQ and/or WINDOW parameters to be x**2" % (window, ))
-  if not (window != 0 and ((window & (window - 1)) == 0)):
-    warn("Window (%s) is not power of 2. Adjust INTERP_FREQ and/or WINDOW parameters" % (window, ))
+    if window % 2 != 0:
+        warn("Window (%s) is not even. Adjust INTERP_FREQ and/or WINDOW parameters to be x**2" % (window, ))
+    if not (window != 0 and ((window & (window - 1)) == 0)):
+        warn("Window (%s) is not power of 2. Adjust INTERP_FREQ and/or WINDOW parameters" % (window, ))
 
-  frag_count = int((len(time_interp) - window) / window / slide_rate)
-  results = []
-  for frag in range(0, frag_count): # get WINDOW secs exactly
-    result = {'record': record, 'frag': frag+1}
-    #print "fragment %s of %s" % (frag+1, int(len(time_interp) / INTERP_FREQ / WINDOW))
-    #chunk_first = ann[c][0] # get sample number of first RR interval
-    #chunk_last = ann[c+w][0] # get sample number of last RR interval
-    #for key in ['age','gender']:
-    #  if key in info:
-    #    r[key] = info[key]
-    #  else:
-    #    r[key] = ''
+    frag_count = int((len(time_interp) - window) / window / slide_rate)
+    results = []
+    for frag in range(0, frag_count): # get WINDOW secs exactly
+        result = {'record': record, 'frag': frag+1}
+        #print "fragment %s of %s" % (frag+1, int(len(time_interp) / INTERP_FREQ / WINDOW))
+        #chunk_first = ann[c][0] # get sample number of first RR interval
+        #chunk_last = ann[c+w][0] # get sample number of last RR interval
+        #for key in ['age','gender']:
+        #  if key in info:
+        #    r[key] = info[key]
+        #  else:
+        #    r[key] = ''
 
-    frag_beg = frag * window * slide_rate
-    frag_end = frag * window * slide_rate + window
+        frag_beg = frag * window * slide_rate
+        frag_end = frag * window * slide_rate + window
 
-    if "base_time" in info:
-      r_first_full = info['base_time'] + \
-          dt.timedelta(seconds=float(time_interp[frag_beg]))
-      r_last_full = info['base_time'] + \
-          dt.timedelta(seconds=float(time_interp[frag_end]))
-    else:
-      r_first_full = dt.datetime(1900, 01, 01, 10, 0, 0) + \
-          dt.timedelta(seconds=float(time_interp[frag_beg]))
-      r_last_full = dt.datetime(1900, 01, 01, 10, 0, 0) + \
-          dt.timedelta(seconds=float(time_interp[frag_end]))
+        if "base_time" in info:
+            r_first_full = info['base_time'] + \
+                dt.timedelta(seconds=float(time_interp[frag_beg]))
+            r_last_full = info['base_time'] + \
+                dt.timedelta(seconds=float(time_interp[frag_end]))
+        else:
+            r_first_full = dt.datetime(1900, 01, 01, 10, 0, 0) + \
+                dt.timedelta(seconds=float(time_interp[frag_beg]))
+            r_last_full = dt.datetime(1900, 01, 01, 10, 0, 0) + \
+                dt.timedelta(seconds=float(time_interp[frag_end]))
     
-    result['time_from'] = r_first_full.strftime("%H:%M:%S")
-    result['time_to'] = r_last_full.strftime("%H:%M:%S")
+        result['time_from'] = r_first_full.strftime("%H:%M:%S")
+        result['time_to'] = r_last_full.strftime("%H:%M:%S")
 
-    result['std'] = (hrv_interp[frag_beg: frag_end]).std()
-    result['mean'] = (hrv_interp[frag_beg: frag_end]).mean()
-    result['cov'] = result['std']/result['mean']*100
+        result['std'] = (hrv_interp[frag_beg: frag_end]).std()
+        result['mean'] = (hrv_interp[frag_beg: frag_end]).mean()
+        result['cov'] = result['std']/result['mean']*100
 
-    freq_filt, fft_filt = fft_filter(time_interp[frag_beg: frag_end], \
-        hrv_interp[frag_beg: frag_end], result)
+        freq_filt, fft_filt = fft_filter(time_interp[frag_beg: frag_end], \
+            hrv_interp[frag_beg: frag_end], result)
 
-    _a,_b = approximate(freq_filt,fft_filt)
-    result['beta'] = -_a
-    line_y = [_a*x+_b for x in freq_filt]
-    plot_results.plot_beta(freq_filt, fft_filt, line_y, result, preview=preview)
+        _a,_b = approximate(freq_filt,fft_filt)
+        result['beta'] = -_a
+        line_y = [_a*x+_b for x in freq_filt]
+        plot_results.plot_beta(freq_filt, fft_filt, line_y, result, preview=preview)
 
-    if beta_limit[0] <= result['beta'] and result['beta'] <= beta_limit[1]:
-      results.append(result)
-      print "%(frag)02d/%(frag_count)02d: %(time_from)s - %(time_to)s\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % dict(result.items()+{'frag_count':frag_count}.items())
-    del frag_beg, frag_end, freq_filt, fft_filt, line_y
+        if beta_limit[0] <= result['beta'] and result['beta'] <= beta_limit[1]:
+            results.append(result)
+            print "%(frag)03d/%(frag_count)03d: %(time_from)s - %(time_to)s\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % dict(result.items()+{'frag_count':frag_count}.items())
+        #del frag_beg, frag_end, freq_filt, fft_filt, line_y
 
-  if results:
-    stats(results)
-    results_to_csv(results, record, info)
-    plot_results.plot_beta_std(results, preview=preview)
-    plot_results.plot_beta_cv(results, preview=preview)
-  else:
-    warn("No results")
+    if results:
+        stats(results)
+        results_to_csv(results, record, info)
+        plot_results.plot_beta_std(results, preview=preview)
+        plot_results.plot_beta_cv(results, preview=preview)
+    else:
+        warn("No results")
 
-  return info, results
+    return info, results
 
 
 def results_to_csv(results,record,info):
-  outfile = open("results_%s.csv" % (record,), "w")
-  outfile.write("%s,%s,%s,%s\n" % (record, info['gender'], info['age'], info['diagnosis']))
-  for r in results:
-    outfile.write("%(time_from)s,%(time_to)s,%(beta)s,%(std)s,%(cov)s,%(mean)s\n" % r)
-  outfile.close()
+    outfile = open("results_%s.csv" % (record,), "w")
+    outfile.write("%s,%s,%s,%s\n" % (record, info['gender'], info['age'], info['diagnosis']))
+    for r in results:
+        outfile.write("%(time_from)s,%(time_to)s,%(beta)s,%(std)s,%(cov)s,%(mean)s\n" % r)
+    outfile.close()
 
 
 def stats(results):
@@ -390,12 +396,30 @@ def stats(results):
     print "Stdev:\t\t\t\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % stdevs
 
 
+def save_params(file_name=None):
+    try:
+        with open(file_name, 'w') as f:
+            params = {
+                'window': WINDOW,
+                'interp_freq': INTERP_FREQ,
+                'spline_order': SPLINE_ORDER,
+                'slide_rate': SLIDE_RATE,
+                'fft_window_func': FFT_WINDOW_FUNC.func_name,
+                'hrv_filter_algo': HRV_FILTER_ALGO,
+                'valid_rr_ratio': VALID_RR_RATIO}
+            for param in params:
+                f.write('%s = %s\n' % (param, params[param]))
+            f.close()
+    except IOError:
+        print 'Could not write to %s' % (file_name,)
+
 if __name__ == '__main__':
-    batch = True
+    batch = False
     if batch:
-        for diag in common.SIGNALS:
-            for record in diag['records'].split():
-                process_signal(record, diag['annotator'], diag['diagnosis'])
+        #for diag in common.SIGNALS:
+        diag = common.SIGNALS[2]
+        for record in diag['records'].split():
+            process_signal(record, diag['annotator'], diag['diagnosis'])
     else:
         #signals = ['16483.atr', '16773.atr']
         #signals = ['16273.atr', '16272.atr']
@@ -403,6 +427,10 @@ if __name__ == '__main__':
         #signals = ['chf05.ecg', 'chf06.ecg']
         #signals = ['nsr004.ecg']
         #for signal in signals:
-        process_signal('chf05','ecg', "CHF", preview=True)
+        #process_signal('chf05','ecg', "CHF", preview=True)
+        #for record in 's20171 s20411 s20501 s20581 s30681 s30742 s30761'.split():
+        #    process_signal(record, 'atr', "Hepertension", preview=False)
         #process_signal('16273','atr', "Normal", preview=True)
         #process_signal('nsr001','ecg', "Normal", preview=True)
+        pass
+    save_params("config.txt")
