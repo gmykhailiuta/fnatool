@@ -105,7 +105,7 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
     freq_filt = pl.zeros(freq.shape, dtype=float) # same for filtered
 
     for i in range(n):  # filter by frequency
-        if freq_limit[0] < abs(freq[i]) and abs(freq[i]) < freq_limit[1]:
+        if freq_limit[0] <= abs(freq[i]) and abs(freq[i]) <= freq_limit[1]:
             freq_filt[i] = freq[i]
             spec_filt[i] = spec[i]
         else:
@@ -118,8 +118,8 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
     #signal_filt_uwed = signal_filt_uwed[:len(time)]
     #signal = signal[:len(time)]
    
-    spec_abs = pl.absolute(spec)[n/2:n]*2/n # half of absolute spectra for orig signal
-    spec_filt_abs = pl.absolute(spec_filt)[n/2:n]*2/n # half of absolute spectra for filt signal
+    spec_abs = pl.absolute(spec)[n/2:n]*2#/n # half of absolute spectra for orig signal
+    spec_filt_abs = pl.absolute(spec_filt)[n/2:n]*2#/n # half of absolute spectra for filt signal
     freq_abs = freq[n/2:n] # half of absolute freqs axis for orig signal
     freq_filt_abs = freq_filt[n/2:n] # half of absolute freqs axis for filt signal
 
@@ -131,10 +131,31 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
     #spec_filt_abs *= 2/n # we cut off half of spectra - needs to be compensated
     #spec_abs *= 2/n
 
-    spec_filt_log = 10*pl.log10(spec_filt_abs) # for output
-    freq_filt_log = 10*pl.log10(freq_filt_abs)
+    spec_filt_log = 20*pl.log10(spec_filt_abs) # for output
+    freq_filt_log = 20*pl.log10(freq_filt_abs)
 
-    if preview and result['frag'] == 1:
+    #pl.figure()
+    # p, f = pl.psd(signal, NFFT=len(signal), Fs=samp_freq, pad_to=len(signal)*4)
+    # f_ = f.copy()
+    # p_ = p.copy()
+    # for i in range(len(f)):  # filter by frequency
+    #     if freq_limit[0] <= abs(f[i]) and abs(f[i]) <= freq_limit[1]:
+    #         f_[i] = f[i]
+    #         p_[i] = p[i]
+    #     else:
+    #         f_[i] = 0 # fill invalid frequencies with small value
+    #         p_[i] = 0
+    # f_ = pl.ma.masked_equal(f_,0) # cutt off invalid values
+    # f_ = pl.ma.compressed(f_)
+    # p_ = pl.ma.masked_equal(p_,0)
+    # p_ = pl.ma.compressed(p_)
+    #pl.figure()
+    #print len(f_)
+    #pl.plot(10*pl.log10(f_), 10*pl.log10(p_))
+    #pl.show()
+    # return 10*pl.log10(f_), 10*pl.log10(p_)
+
+    if preview and (result['frag'] == 0):
         fig = pl.figure("fft", figsize=(10, 10), facecolor='white') # plotting
 
         sp_sig = fig.add_subplot(221)
@@ -334,24 +355,6 @@ def stats(results):
     print "Stdev:\t\t\t\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % stdevs
 
 
-# def save_params(file_name=None):
-#     try:
-#         with open(file_name, 'w') as f:
-#             params = {
-#                 'window': WINDOW,
-#                 'interp_freq': INTERP_FREQ,
-#                 'spline_order': SPLINE_ORDER,
-#                 'slide_rate': SLIDE_RATE,
-#                 'fft_window_func': FFT_WINDOW_FUNC.func_name,
-#                 'hrv_filter_algo': HRV_FILTER_ALGO,
-#                 'valid_rr_ratio': VALID_RR_RATIO}
-#             for param in params:
-#                 f.write('%s = %s\n' % (param, params[param]))
-#             f.close()
-#     except IOError:
-#         print 'Could not write to %s' % (file_name,)
-
-
 if __name__ == '__main__':
     global config
     config = common.load_config()
@@ -363,7 +366,8 @@ if __name__ == '__main__':
                 process_signal(record, diag['annotator'], diag['diagnosis'],
                     slide_rate=config['SLIDE_RATE'], preview=config['PREVIEW'])
     else:
-        records = '16483 16773'
+        #records = '16483 16773'
+        records = '16483 16773 16795 17453'
         #signals = ['16273.atr', '16272.atr']
         #signals = ['chf04.ecg']
         #signals = ['chf05.ecg', 'chf06.ecg']

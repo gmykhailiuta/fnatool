@@ -113,8 +113,8 @@ def plot_homeostasis(preview=False):
         pl.ylabel(r"$\beta$", fontsize=18)
         pl.grid()
         #print len(records_stat[0]),len(records_stat[1]),len(records_stat[2])
-        #std, beta = common.filter2d(records_stat[1], records_stat[0], axes=['x','y'], algos=['5per95'])
-        std, beta = records_stat[1], records_stat[0]
+        std, beta = common.filter2d(records_stat[1], records_stat[0], axes=['x','y'], algos=['5per95'])
+        #std, beta = records_stat[1], records_stat[0]
         sp_beta_std.scatter(std,beta,label=db['diagnosis'],color=db['plot_color'])
 
         sp_beta_cov = pl.subplot(122, sharey=sp_beta_std)
@@ -122,8 +122,8 @@ def plot_homeostasis(preview=False):
         pl.axhline(y=1,color='k')
         pl.xlabel(r"$\sigma/\bar{x}$", fontsize=18)
         pl.grid()
-        #cov, beta = common.filter2d(records_stat[2], records_stat[0], axes=['x','y'], algos=['5per95'])
-        cov, beta = records_stat[2], records_stat[0]
+        cov, beta = common.filter2d(records_stat[2], records_stat[0], axes=['x','y'], algos=['5per95'])
+        #cov, beta = records_stat[2], records_stat[0]
         sp_beta_cov.scatter(cov,beta,label=db['diagnosis'],color=db['plot_color'])
 
         pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
@@ -156,8 +156,10 @@ def plot_homeostasis(preview=False):
     pl.xlabel(r"$\sigma/\bar{x}$", fontsize=18)
     pl.grid()
     for db in config['SIGNALS']:
+        std, beta = common.filter2d(diagnosis_stat[1], diagnosis_stat[0], axes=['x','y'], algos=['5per95'])
         sp_beta_std.scatter(diagnosis_stat[1],diagnosis_stat[0],label=db['diagnosis'],color=db['plot_color'],marker='x')
-        sp_beta_cov.scatter(diagnosis_stat[2],diagnosis_stat[0],label=db['diagnosis'],color=db['plot_color'],marker='x')
+        cov, beta = common.filter2d(diagnosis_stat[2], diagnosis_stat[0], axes=['x','y'], algos=['5per95'])
+        sp_beta_cov.scatter(cov,beta,label=db['diagnosis'],color=db['plot_color'],marker='x')
 
     pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
     sp_beta_cov.legend(loc='best')
@@ -179,14 +181,10 @@ def boxplot_diagnosis(preview=False):
         for record in records:
             signal = common.read_signal("results_%s.csv" % record)
             if signal:
-                record_stat[0].append(signal['beta'])
-                record_stat[1].append(signal['std'])
-                record_stat[2].append(signal['cov'])
-                record_stat[3].append(signal['mean'])
-        #record_stat_filt = list(record_stat)
-        #for s in range(len(record_stat)):
-        #    for r in range(len(record_stat[s])):
-        #        record_stat_filt[s][r] = common.filter1d(record_stat[s][r], algos=['5per95'])
+                record_stat[0].append(signal['beta'] * common.filter1d(signal['beta'], algos=['5per95']))
+                record_stat[1].append(signal['std'] * common.filter1d(signal['std'], algos=['5per95']))
+                record_stat[2].append(signal['cov'] * common.filter1d(signal['cov'], algos=['5per95']))
+                record_stat[3].append(signal['mean'] * common.filter1d(signal['mean'], algos=['5per95']))
         fig = pl.figure("boxplot_%s" % db['diagnosis'], figsize=(12, 12), facecolor='white')
         fig.suptitle('Statistics for %s database' % db['diagnosis'], fontsize=20)
         xticks = range(1,len(records)+1)
@@ -229,12 +227,11 @@ def boxplot_diagnosis(preview=False):
             diagnosis_stat[i].append(list(itertools.chain.from_iterable(record_stat[i])))
         legend.append(db['diagnosis'][:3])
 
-
     #for i in range(len(diagnosis_stat)):
      #   diagnosis_stat_filt[i] = common.filter2d(diagnosis_stat[i], diagnosis_stat[i], axes=['x'], algos=['5per95'])
-    #for s in range(len(diagnosis_stat)):
-    #    for r in range(len(diagnosis_stat[s])):
-    #        diagnosis_stat[s][r] = common.filter1d(diagnosis_stat[s][r], algos=['5per95'])
+    for s in range(len(diagnosis_stat)):
+        for r in range(len(diagnosis_stat[s])):
+            diagnosis_stat[s][r] *= common.filter1d(diagnosis_stat[s][r], algos=['5per95'])
     fig = pl.figure("boxplot_diagnosis_summary", figsize=(12, 12), facecolor='white')
     fig.suptitle('Summary statistics for diagnoses', fontsize=20)   
     xticks = range(1,len(config['SIGNALS'])+1)
@@ -318,7 +315,7 @@ def plot_clusters(preview=False):
     sp_beta_cov.scatter(res[:,0],res[:,1], marker='o', s = 1500, linewidths=2, c='w', alpha=0.5)
     sp_beta_cov.scatter(res[:,0],res[:,1], marker='x', s = 500, linewidths=2, c='k')
 
-    pl.subplots_adjust(left=0.06, right=0.95, top=0.9, bottom=0.1)
+    pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1)
     pl.savefig("clusterization.png",facecolor='w',edgecolor='k',transparent=True)
     if preview:
         pl.show()
@@ -380,6 +377,6 @@ if __name__ == '__main__':
     global config
     config = common.load_config()
     plot_homeostasis(1)
-    boxplot_diagnosis(1)
-    plot_clusters(1)
+    #boxplot_diagnosis(1)
+    #plot_clusters(1)
     #plot_homeostasis_interp(1)
