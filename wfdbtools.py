@@ -363,7 +363,7 @@ def rdhdr(record):
 
     DESC_REGEX = re.compile(r''.join([
             "(?P<age>[\d?]{1,2})\s*",
-            "[^MF]*(?P<gender>[MF]{1})\s*",
+            "[^MF]*(?P<gender>[MF?]{1})\s*",
             "(?P<diagnosis>.*)"]))
 
     header_lines, comment_lines = _getheaderlines(record)

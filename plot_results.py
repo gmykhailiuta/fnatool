@@ -89,6 +89,48 @@ def plot_beta(freq, fft, aprox_y, result, preview=False):
 
 
 def plot_homeostasis(preview=False):
+    legend = []
+    diagnosis_stat = [[],[],[]]
+    for db in common.SIGNALS:
+        records_stat = [[],[],[]]
+        for record in db['records'].split():
+            signal = common.read_signal("results_%s.csv" % record)
+            if signal:
+                records_stat[0].extend(signal['beta'])
+                records_stat[1].extend(signal['std'])
+                records_stat[2].extend(signal['cov'])
+
+        fig = pl.figure("stochastic_homeostasis_%s" % db['diagnosis'], figsize=(12, 12), facecolor='white')
+        fig.suptitle('Stochastic homeostasis of %s database' % db['diagnosis'], fontsize=20)        
+        sp_beta_std = pl.subplot(121)
+        pl.ylim(0,2)
+        pl.xlim(0,140)
+        pl.axhline(y=1,color='k')
+        pl.axvline(x=70,color='k')
+        pl.xlabel(r"$\sigma\ (ms)$", fontsize=18)
+        pl.ylabel(r"$\beta$", fontsize=18)
+        pl.grid()
+        #print len(records_stat[0]),len(records_stat[1]),len(records_stat[2])
+        sp_beta_std.scatter(records_stat[1],records_stat[0],label=db['diagnosis'],color=db['plot_color'])
+
+        sp_beta_cov = pl.subplot(122, sharey=sp_beta_std)
+        pl.xlim(0,50)
+        pl.axhline(y=1,color='k')
+        pl.xlabel(r"$\sigma/\bar{x}$", fontsize=18)
+        pl.grid()
+        sp_beta_cov.scatter(records_stat[2],records_stat[0],label=db['diagnosis'],color=db['plot_color'])
+
+        #pl.subplots_adjust(left=0.06, right=0.95, top=0.94, bottom=0.1)
+        pl.savefig("stochastic_homeostasis_diagnosis_%s.png" % (db['diagnosis'],),facecolor='w',edgecolor='k',transparent=True)
+        if preview:
+            pl.show()
+        #pprint(records_stat[0][:10])
+        for i in range(3):
+            diagnosis_stat[i].extend(records_stat[i])
+        legend.append(db['diagnosis'][:2])
+        print db['diagnosis'][:2]
+        
+
     pl.figure("stochastic_homeostasis_summary", figsize=(12, 6), facecolor='white')
     pl.title(r'$\beta$ by desease')
     pl.suptitle('Stochastic homeostasis by diagnosis', fontsize=20) 
@@ -107,20 +149,12 @@ def plot_homeostasis(preview=False):
     pl.axhline(y=1,color='k')
     pl.xlabel(r"$\sigma/\bar{x}$", fontsize=18)
     pl.grid()
-
     for db in common.SIGNALS:
-        record_stat = [[],[],[]]
-        for record in db['records'].split():
-            signal = common.read_signal("results_%s.csv" % record)
-            if signal:
-                record_stat[0].extend(signal['beta'])
-                record_stat[1].extend(signal['std'])
-                record_stat[2].extend(signal['cov'])
-        sp_beta_std.scatter(record_stat[1],record_stat[0],label=db['diagnosis'],color=db['plot_color'])
-        sp_beta_cov.scatter(record_stat[2],record_stat[0],label=db['diagnosis'],color=db['plot_color'])
+        sp_beta_std.scatter(diagnosis_stat[1],diagnosis_stat[0],label=db['diagnosis'],color=db['plot_color'])
+        sp_beta_cov.scatter(diagnosis_stat[2],diagnosis_stat[0],label=db['diagnosis'],color=db['plot_color'])
 
-    pl.subplots_adjust(left=0.06, right=0.95, top=0.9, bottom=0.1)
-    sp_beta_cov.legend(loc='best')
+    pl.subplots_adjust(left=0.06, right=0.95, top=0.94, bottom=0.1)
+    sp_beta_cov.legend(legend,loc='best')
     pl.savefig("stochastic_homeostasis_diagnosis.png",facecolor='w',edgecolor='k',transparent=True)
     if preview:
         pl.show()
@@ -129,64 +163,66 @@ def plot_homeostasis(preview=False):
 
 def boxplot_diagnosis(preview=False):
     legend = []
-    by_diagnosis = [[],[],[],[]]
+    diagnosis_stat = [[],[],[],[]]
     #betas, stds, covs, means = [], [], [], []
     for db in common.SIGNALS:
-        by_record = [[],[],[],[]]
+        record_stat = [[],[],[],[]]
         records = db['records'].split()
         for record in records:
             signal = common.read_signal("results_%s.csv" % record)
             if signal:
-                by_record[0].append(signal['beta'])
-                by_record[1].append(signal['std'])
-                by_record[2].append(signal['cov'])
-                by_record[3].append(signal['mean'])
+                record_stat[0].append(signal['beta'])
+                record_stat[1].append(signal['std'])
+                record_stat[2].append(signal['cov'])
+                record_stat[3].append(signal['mean'])
         fig = pl.figure("boxplot_%s" % db['diagnosis'], figsize=(12, 12), facecolor='white')
         fig.suptitle('Statistics for %s database' % db['diagnosis'], fontsize=20)        
         sp_beta = pl.subplot(221)
-        sp_beta.boxplot(by_record[0])
+        pl.title(r"$\beta$", fontsize=18)
+        #pprint(record_stat[0])
+        sp_beta.boxplot(record_stat[0])
         pl.xticks(range(1,len(records)+1),records, rotation='vertical')
-        pl.ylabel(r"$\beta$", fontsize=18)
         sp_std = pl.subplot(222,sharex=sp_beta)
-        sp_std.boxplot(by_record[1])
+        pl.title(r"$\sigma$", fontsize=18)
+        sp_std.boxplot(record_stat[1])
         pl.xticks(range(1,len(records)+1),records, rotation='vertical')
-        pl.ylabel(r"$\sigma$", fontsize=18)
         sp_cov = pl.subplot(223,sharex=sp_beta)
-        sp_cov.boxplot(by_record[2])
+        pl.title(r"$\sigma/\bar{x}$", fontsize=18)
+        sp_cov.boxplot(record_stat[2])
         pl.xticks(range(1,len(records)+1),records, rotation='vertical')
-        pl.ylabel(r"$\sigma/\bar{x}$", fontsize=18)
         sp_mean = pl.subplot(224,sharex=sp_beta)
-        sp_mean.boxplot(by_record[3])
+        pl.title(r"$\bar{x}$", fontsize=18)
+        sp_mean.boxplot(record_stat[3])
         pl.xticks(range(1,len(records)+1),records, rotation='vertical')
-        pl.ylabel(r"$\bar{x}$", fontsize=18)
-        pl.subplots_adjust(left=0.06, right=0.95, top=0.94, bottom=0.1)
+        pl.subplots_adjust(left=0.06, right=0.95, top=0.91, bottom=0.09, wspace=0.15, hspace=0.3)
         pl.savefig("boxplot_diagnosis_%s.png" % (db['diagnosis'],),facecolor='w',edgecolor='k',transparent=True)
         if preview:
             pl.show()
 
         for i in range(4):
-            by_diagnosis[i].append(list(itertools.chain.from_iterable(by_record[i])))
+            diagnosis_stat[i].append(list(itertools.chain.from_iterable(record_stat[i])))
         legend.append(db['diagnosis'][:2])
 
     fig = pl.figure("boxplot_diagnosis_summary", figsize=(12, 12), facecolor='white')
     fig.suptitle('Summary statistics for diagnoses', fontsize=20)        
     sp_beta = pl.subplot(221)
-    sp_beta.boxplot(by_diagnosis[0])
+    pl.title(r"$\beta$", fontsize=18)
+    sp_beta.boxplot(diagnosis_stat[0])
     pl.xticks(range(1,len(common.SIGNALS)+1),legend, rotation='vertical')
     pl.ylabel(r"$\beta$", fontsize=18)
     sp_std = pl.subplot(222,sharex=sp_beta)
-    sp_std.boxplot(by_diagnosis[1])
+    pl.title(r"$\sigma$", fontsize=18)
+    sp_std.boxplot(diagnosis_stat[1])
     pl.xticks(range(1,len(common.SIGNALS)+1),legend, rotation='vertical')
-    pl.ylabel(r"$\sigma$", fontsize=18)
     sp_cov = pl.subplot(223,sharex=sp_beta)
-    sp_cov.boxplot(by_diagnosis[2])
+    pl.title(r"$\sigma/\bar{x}$", fontsize=18)
+    sp_cov.boxplot(diagnosis_stat[2])
     pl.xticks(range(1,len(common.SIGNALS)+1),legend, rotation='vertical')
-    pl.ylabel(r"$\sigma/\bar{x}$", fontsize=18)
     sp_mean = pl.subplot(224,sharex=sp_beta)
-    sp_mean.boxplot(by_diagnosis[3])
+    pl.title(r"$\bar{x}$", fontsize=18)
+    sp_mean.boxplot(diagnosis_stat[3])
     pl.xticks(range(1,len(common.SIGNALS)+1),legend, rotation='vertical')
-    pl.ylabel(r"$\bar{x}$", fontsize=18)
-    pl.subplots_adjust(left=0.06, right=0.95, top=0.94, bottom=0.1)
+    pl.subplots_adjust(left=0.06, right=0.95, top=0.94, bottom=0.1, wspace=0.1, hspace=0.1)
     pl.savefig("boxplot_diagnosis_summary.png",facecolor='w',edgecolor='k',transparent=True)
     if preview:
         pl.show()
@@ -194,9 +230,9 @@ def boxplot_diagnosis(preview=False):
 
 
 def plot_clusters(preview=False):
-    pl.figure("clusterisation", figsize=(12, 6), facecolor='white')
-    pl.title('Clusterisation by desease')
-    pl.suptitle('Clasterisation', fontsize=20) 
+    pl.figure("clusterization", figsize=(12, 6), facecolor='white')
+    pl.title('Clusterization by desease')
+    pl.suptitle('Clusterization', fontsize=20) 
     
     sp_beta_std = pl.subplot(121)
     pl.axhline(y=1,color='k')
@@ -220,24 +256,24 @@ def plot_clusters(preview=False):
                 stat[0].extend(signal['beta'])
                 stat[1].extend(signal['std'])
                 stat[2].extend(signal['cov'])
-    
-    pl.subplots_adjust(left=0.06, right=0.95, top=0.9, bottom=0.1)
-    pl.savefig("clusterisation.png",facecolor='w',edgecolor='k',transparent=True)
+
 
     std, beta = common.filter2d(stat[1], stat[0], '2sigma')
     res, idx = kmeans2(pl.array(zip(std, beta)),len(common.SIGNALS))
-    colors = ([([0.4,1,0.4],[1,0.4,0.4],[0.1,0.8,1])[i] for i in idx])
+    colors = ([common.SIGNALS[i]['plot_color'] for i in idx])
     sp_beta_std.scatter(std, beta, c=colors)
     sp_beta_std.scatter(res[:,0],res[:,1], marker='o', s = 500, linewidths=2, c='none')
     sp_beta_std.scatter(res[:,0],res[:,1], marker='x', s = 500, linewidths=2, c='k')
 
     cov, beta = common.filter2d(stat[2], stat[0], '2sigma')
     res, idx = kmeans2(pl.array(zip(cov, beta)),len(common.SIGNALS))
-    colors = ([([0.4,1,0.4],[1,0.4,0.4],[0.1,0.8,1])[i] for i in idx])
+    colors = ([common.SIGNALS[i]['plot_color'] for i in idx])
     sp_beta_cov.scatter(cov, beta, c=colors)    
     sp_beta_cov.scatter(res[:,0],res[:,1], marker='o', s = 500, linewidths=2, c='none')
     sp_beta_cov.scatter(res[:,0],res[:,1], marker='x', s = 500, linewidths=2, c='k')
 
+    pl.subplots_adjust(left=0.06, right=0.95, top=0.9, bottom=0.1)
+    pl.savefig("clusterization.png",facecolor='w',edgecolor='k',transparent=True)
     if preview:
         pl.show()
     pl.close()
@@ -292,7 +328,7 @@ def plot_homeostasis_interp(preview=False):
 
 
 if __name__ == '__main__':
-    plot_homeostasis()
-    #boxplot_diagnosis()
-    #plot_clusters()
-    #plot_homeostasis_interp()
+    #plot_homeostasis(1)
+    #boxplot_diagnosis(1)
+    plot_clusters(1)
+    #plot_homeostasis_interp(1)

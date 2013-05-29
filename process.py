@@ -6,6 +6,7 @@ import datetime as dt
 from scipy.interpolate import splrep,splev
 from pprint import pprint
 from warnings import warn
+import subprocess
 import common
 import plot_results
 
@@ -23,6 +24,7 @@ Compare window size
 + Grid
 + 3D interpolation
 + Cluster analysis
++ Optimize memory usage
 Spectrogram
 Lomb FFT
 Parameters as command Parameters
@@ -35,7 +37,7 @@ SPLINE_ORDER = 2 # The order of the spline fit. 1 <= k <= 5
 FREQ_LIMIT = (0.0033, 0.04) # (min_freq, max_freq)
 BETA_LIMIT = (0., 2.) # used to be 0.5 < beta < 1.5
 SLIDE_RATE = .2 # 0 < x < 1
-FFT_WINDOW_FUNC = pl.hanning
+FFT_WINDOW_FUNC = pl.window_none
 VALID_RR_RATIO = 0.2 # 0 < x < 1
 HRV_FILTER_ALGO = '2sigma' # 0 - old, rr_last / rr - 1 < 0.2; 1 - new, mean - 2 std < rr < mean + 2 std
 
@@ -145,8 +147,8 @@ def variability(r_times):
             HRV vector
     """
 
+    time = pl.delete(r_times,-1)
     hrv = pl.zeros(len(r_times)-1, dtype='float32')
-    time = r_times.copy()
 
     for i in range(0, len(r_times)-1):
         hrv[i] = (r_times[i+1]-r_times[i])* 1000
@@ -154,6 +156,7 @@ def variability(r_times):
     #if len(time) > len(hrv):
     #    hrv[-1] = 0
     #print pl.shape(r_times), pl.shape(time),pl.shape(hrv)
+    assert pl.shape(time) == pl.shape(hrv)
     return time, hrv
 
 
@@ -166,7 +169,8 @@ def interpolate(x, y, k=SPLINE_ORDER):
         xnew, ynew : ndarray, Interpolated data
     """
     assert pl.shape(x) == pl.shape(y)
-
+    #print float((x.max()-x.min())/INTERP_FREQ)
+    #print x.min(), x.max()
     xnew = pl.arange(x.min(), x.max(), 1.0/INTERP_FREQ, dtype='float32')
     tck = splrep(x, y, k=k, s=0)
     ynew = splev(xnew, tck, der=0)
@@ -184,8 +188,8 @@ def fft_filter(time, signal, result, window_func=FFT_WINDOW_FUNC, \
         result : dict, current fragment info
         freq_limit : frequencies for band pass filter, analyzed freq range
     Out:
-        20*log10 of frequency vector
-        20*log10 of specturm
+        10*log10 of frequency vector
+        10*log10 of specturm
     """
     _time = time.copy()
     _time -= min(_time) # make relative time for this fragment
@@ -211,7 +215,7 @@ def fft_filter(time, signal, result, window_func=FFT_WINDOW_FUNC, \
 
     signal_filt = pl.absolute(pl.ifft(pl.ifftshift(spec_filt))) # get filtered signal
     signal_filt_uwed = signal_filt.copy()
-    signal_filt_uwed[1:-1] /= window[1:-1]
+    #signal_filt_uwed[1:-1] /= window[1:-1]
     #signal_filt_uwed = signal_filt_uwed[:len(time)]
     #signal = signal[:len(time)]
    
@@ -228,8 +232,8 @@ def fft_filter(time, signal, result, window_func=FFT_WINDOW_FUNC, \
     #spec_filt_abs *= 2/n # we cut off half of spectra - needs to be compensated
     #spec_abs *= 2/n
 
-    spec_filt_log = 20*pl.log10(spec_filt_abs) # for output
-    freq_filt_log = 20*pl.log10(freq_filt_abs)
+    spec_filt_log = 10*pl.log10(spec_filt_abs) # for output
+    freq_filt_log = 10*pl.log10(freq_filt_abs)
 
     if preview and result['frag'] == 1:
         fig = pl.figure("fft", figsize=(10, 10), facecolor='white') # plotting
@@ -291,16 +295,30 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
     if diagnosis:
         info['diagnosis'] = diagnosis
     print "Processing %s: %s %s %s" % (record, info['gender'], info['age'], info['diagnosis'])
-  
+
     # rdann(record, annotator, start=0, end=-1, types=[])
-    ann = rdann(record, annotator, start, end, [1])
-  
-    time, hrv = variability(ann[:,1]-ann[0,1])
-    time, hrv = common.filter2d(time, hrv, filtration_algo=HRV_FILTER_ALGO)
-    time_interp, hrv_interp = interpolate(time, hrv)
+    #ann = rdann(record, annotator, start, end, [1])
+    r_samples = read_r_samples(record, annotator)
+    
+    r_times = pl.empty(len(r_samples), dtype='float32')
+    r_times = r_samples / info['samp_freq']
+
+    del r_samples
+
+    #for i in range(10):
+    #    print "{0:.10f}".format(r_times[i])
+    
+    time, hrv = variability(r_times)
+    del r_times
+
+    time_filt, hrv_filt = common.filter2d(time, hrv, filtration_algo=HRV_FILTER_ALGO)
+    #print pl.shape(time_filt), pl.shape(hrv_filt)
+    time_interp, hrv_interp = interpolate(time_filt, hrv_filt)
 
     if preview:
         plot_results.plot_hrv([time, hrv], [time_interp, hrv_interp], record, preview=preview)
+
+    del time, hrv
 
     #signal_to_csv(record, time, hrv, info)
   
@@ -346,7 +364,7 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
         result['cov'] = result['std']/result['mean']*100
 
         freq_filt, fft_filt = fft_filter(time_interp[frag_beg: frag_end], \
-            hrv_interp[frag_beg: frag_end], result)
+            hrv_interp[frag_beg: frag_end], result, preview=preview)
 
         _a,_b = approximate(freq_filt,fft_filt)
         result['beta'] = -_a
@@ -356,7 +374,7 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
         if beta_limit[0] <= result['beta'] and result['beta'] <= beta_limit[1]:
             results.append(result)
             print "%(frag)03d/%(frag_count)03d: %(time_from)s - %(time_to)s\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % dict(result.items()+{'frag_count':frag_count}.items())
-        #del frag_beg, frag_end, freq_filt, fft_filt, line_y
+        del frag_beg, frag_end, freq_filt, fft_filt, line_y
 
     if results:
         stats(results)
@@ -367,6 +385,17 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
         warn("No results")
 
     return info, results
+
+def read_r_samples(record, annotator):
+    r_samples = []
+    proc = subprocess.Popen(['rdann','-r',record,'-a',annotator,'-p','N','-c','0'],bufsize=-1,stdout=subprocess.PIPE)
+    for line in iter(proc.stdout.readline,''):
+        sample = line.split()[1]
+        if sample.isdigit():
+            #time = (ann[0])[1:-1]
+            r_samples.append(int(sample))
+
+    return pl.array(r_samples, dtype=pl.uint32)
 
 
 def results_to_csv(results,record,info):
@@ -417,7 +446,7 @@ if __name__ == '__main__':
     batch = False
     if batch:
         #for diag in common.SIGNALS:
-        diag = common.SIGNALS[2]
+        diag = common.SIGNALS[3]
         for record in diag['records'].split():
             process_signal(record, diag['annotator'], diag['diagnosis'])
     else:
@@ -428,9 +457,9 @@ if __name__ == '__main__':
         #signals = ['nsr004.ecg']
         #for signal in signals:
         #process_signal('chf05','ecg', "CHF", preview=True)
-        #for record in 's20171 s20411 s20501 s20581 s30681 s30742 s30761'.split():
-        #    process_signal(record, 'atr', "Hepertension", preview=False)
+        for record in 'chf202 chf203 chf204'.split():
+            process_signal(record, 'ecg', "HF2", preview=False)
         #process_signal('16273','atr', "Normal", preview=True)
-        #process_signal('nsr001','ecg', "Normal", preview=True)
+        #process_signal('nsr006','ecg', "Normal", preview=True)
         pass
-    save_params("config.txt")
+    #save_params("config.txt")
