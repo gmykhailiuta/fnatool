@@ -9,6 +9,7 @@ from warnings import warn
 import subprocess
 import common
 import plot_results
+global config
 
 """
 + Summary plot for all signals
@@ -25,117 +26,13 @@ Compare window size
 + 3D interpolation
 + Cluster analysis
 + Optimize memory usage
++ Config files
 Spectrogram
 Lomb FFT
 Parameters as command Parameters
 Do not use pylab (or fix case if using Gtk)
 """
 
-WINDOW = 1024 # should be 2**x
-INTERP_FREQ = 8 # should be 2**x
-SPLINE_ORDER = 2 # The order of the spline fit. 1 <= k <= 5
-FREQ_LIMIT = (0.0033, 0.04) # (min_freq, max_freq)
-BETA_LIMIT = (0., 2.) # used to be 0.5 < beta < 1.5
-SLIDE_RATE = .2 # 0 < x < 1
-FFT_WINDOW_FUNC = pl.window_none
-VALID_RR_RATIO = 0.2 # 0 < x < 1
-HRV_FILTER_ALGO = '2sigma' # 0 - old, rr_last / rr - 1 < 0.2; 1 - new, mean - 2 std < rr < mean + 2 std
-
-
-def _variability(r_times, filtration_algo=HRV_FILTER_ALGO, \
-    valid_rr_ratio=VALID_RR_RATIO):
-    """
-    Get HRV from RR times array.
-    Parameters:
-        r_times : ndarray
-    Returns:
-        time : ndarray
-            Time vector
-        rrs : ndarray
-            HRV vector
-    """
-    
-    if filtration_algo == 0:
-        rrs = pl.zeros(len(r_times), dtype='float32')
-        time = pl.array(r_times, dtype='float32')
-        #last_r_time = 0
-        # backward
-        time[0] = 0
-        last_rr = 0
-        for i in range(1, len(r_times)):
-            rr = (r_times[i]-r_times[i-1])* 1000
-            if last_rr: # if first rr computed, go with validation
-                if (abs(last_rr / rr - 1) <= valid_rr_ratio) and \
-                    (rr > 100) and (rr < 2000): # current rr differs less then 20% of previous one
-                    rrs[i] = rr
-                    last_rr = rr
-                else:
-                    rrs[i] = 0
-                    time[i] = 0
-            else: # no rrs computed yet. need first for validation to work
-                rrs[i] = rr
-                last_rr = rr
-            #last_rr = rr
-
-        rrs = pl.ma.masked_equal(rrs,0)
-        rrs = pl.ma.compressed(rrs)
-        time = pl.ma.masked_equal(time,0)
-        time = pl.ma.compressed(time)
-
-    elif filtration_algo == 1:
-        rrs = pl.zeros(len(r_times)-1, dtype='float32')
-        time = pl.array(r_times, dtype='float32')
-
-        for i in range(0, len(r_times)-1):
-            rrs[i] = (r_times[i+1]-r_times[i])* 1000
-
-        mean = pl.mean(rrs)
-        std = pl.std(rrs)
-      
-        for i in range(0, len(rrs)):
-            if pl.logical_or(rrs[i] < mean - 2*std, mean + 2*std < rrs[i]):
-                rrs[i] = 0
-                time[i] = 0
-
-        rrs = pl.ma.masked_equal(rrs,0)
-        rrs = pl.ma.compressed(rrs)
-        time = pl.ma.masked_equal(time,0)
-        time = pl.ma.compressed(time)
-
-    elif filtration_algo == 2:
-        rrs = pl.zeros(len(r_times)-1, dtype='float32')
-        time = pl.array(r_times, dtype='float32')
-
-        last_rr = 0
-        for i in range(0, len(r_times)-1):
-            rr = (r_times[i+1]-r_times[i])* 1000
-            if last_rr: # if first rr computed, go with validation
-                if (abs(last_rr / rr - 1) <= valid_rr_ratio): # current rr differs less then 20% of previous one
-                    rrs[i] = rr
-                    last_rr = rr
-                else:
-                    rrs[i] = 0
-                    time[i] = 0
-            else: # no rrs computed yet. need first for validation to work
-                rrs[i] = rr
-                last_rr = rr
-        rrs = pl.ma.masked_equal(rrs,0)
-        rrs = pl.ma.compressed(rrs)
-        time = pl.ma.masked_equal(time,0)
-        time = pl.ma.compressed(time)
-
-        mean = pl.mean(rrs)
-        std = pl.std(rrs)
-      
-        for rr in range(0, len(rrs)):
-            if pl.logical_or(rrs[i] < mean - 2*std, mean + 2*std < rrs[i]):
-                rrs[i] = 0
-                time[i] = 0
-    else:
-       warn("Donno anything about such hrv filtration algorythm")
-
-    print "NB: Deleted %0.2f%% intervals" % (float(len(r_times)-len(rrs))/len(r_times)*100,)
-    return time, rrs
 
 def variability(r_times):
     """
@@ -162,7 +59,7 @@ def variability(r_times):
     return time, hrv
 
 
-def interpolate(x, y, k=SPLINE_ORDER):
+def interpolate(x, y, order=2):
     """
     Interpolates x/y using cubic interpolation
     In:
@@ -173,14 +70,14 @@ def interpolate(x, y, k=SPLINE_ORDER):
     assert pl.shape(x) == pl.shape(y)
     #print float((x.max()-x.min())/INTERP_FREQ)
     #print x.min(), x.max()
-    xnew = pl.arange(x.min(), x.max(), 1.0/INTERP_FREQ, dtype='float32')
-    tck = splrep(x, y, k=k, s=0)
+    xnew = pl.arange(x.min(), x.max(), 1.0/config['INTERP_FREQ'], dtype='float32')
+    tck = splrep(x, y, k=order, s=0)
     ynew = splev(xnew, tck, der=0)
     return xnew, ynew
 
 
-def fft_filter(time, signal, result, window_func=FFT_WINDOW_FUNC, \
-               samp_freq=INTERP_FREQ, freq_limit = FREQ_LIMIT, preview=False):
+def fft_filter(time, signal, result, window_func=pl.hanning, \
+               samp_freq=8, freq_limit = (0.0033, 0.04), preview=False):
     """
     Applies an Band Pass filter to signal in the frequency domain and plots
         signals and their spectrals.
@@ -291,8 +188,9 @@ def approximate(x,y):
     return a, b
 
 
-def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
-                   slide_rate=SLIDE_RATE, beta_limit=BETA_LIMIT, preview=False):
+def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
+        preview=False):
+    global config
     # rdhdr(record)
     info = rdhdr(record)
     if diagnosis:
@@ -315,9 +213,10 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
     time, hrv = variability(r_times)
     del r_times
 
-    time_filt, hrv_filt = common.filter2d(time, hrv, filtration_algo=HRV_FILTER_ALGO)
+    time_filt, hrv_filt = common.filter2d(time, hrv,\
+        algos=config['HRV_FILTER_ALGO'], valid_delta_ratio=config['VALID_DELTA_RATIO'])
     #print pl.shape(time_filt), pl.shape(hrv_filt)
-    time_interp, hrv_interp = interpolate(time_filt, hrv_filt)
+    time_interp, hrv_interp = interpolate(time_filt, hrv_filt, config['SPLINE_ORDER'])
 
     if preview:
         plot_results.plot_hrv([time, hrv], [time_interp, hrv_interp], record,\
@@ -327,7 +226,7 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
 
     #signal_to_csv(record, time, hrv, info)
   
-    window = INTERP_FREQ * WINDOW
+    window = config['INTERP_FREQ'] * config['WINDOW']
 
     if window % 2 != 0:
         warn("Window (%s) is not even. Adjust INTERP_FREQ and/or WINDOW parameters to be x**2" % (window, ))
@@ -369,16 +268,21 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
         result['cov'] = result['std']/result['mean']*100
 
         freq_filt, fft_filt = fft_filter(time_interp[frag_beg: frag_end], \
-            hrv_interp[frag_beg: frag_end], result, preview=preview)
+                hrv_interp[frag_beg: frag_end],\
+                result,\
+                window_func=getattr(pl, config['FFT_WINDOW_FUNC']),\
+                samp_freq=config['INTERP_FREQ'],\
+                freq_limit = config['FREQ_LIMIT'],\
+                preview=preview)
 
         _a,_b = approximate(freq_filt,fft_filt)
         result['beta'] = -_a
         line_y = [_a*x+_b for x in freq_filt]
         plot_results.plot_beta(freq_filt, fft_filt, line_y, result, preview=preview)
 
-        if beta_limit[0] <= result['beta'] and result['beta'] <= beta_limit[1]:
-            results.append(result)
-            print "%(frag)03d/%(frag_count)03d: %(time_from)s - %(time_to)s\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % dict(result.items()+{'frag_count':frag_count}.items())
+        #if beta_limit[0] <= result['beta'] and result['beta'] <= beta_limit[1]:
+        results.append(result)
+        print "%(frag)03d/%(frag_count)03d: %(time_from)s - %(time_to)s\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % dict(result.items()+{'frag_count':frag_count}.items())
         del frag_beg, frag_end, freq_filt, fft_filt, line_y
 
     if results:
@@ -430,40 +334,44 @@ def stats(results):
     print "Stdev:\t\t\t\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % stdevs
 
 
-def save_params(file_name=None):
-    try:
-        with open(file_name, 'w') as f:
-            params = {
-                'window': WINDOW,
-                'interp_freq': INTERP_FREQ,
-                'spline_order': SPLINE_ORDER,
-                'slide_rate': SLIDE_RATE,
-                'fft_window_func': FFT_WINDOW_FUNC.func_name,
-                'hrv_filter_algo': HRV_FILTER_ALGO,
-                'valid_rr_ratio': VALID_RR_RATIO}
-            for param in params:
-                f.write('%s = %s\n' % (param, params[param]))
-            f.close()
-    except IOError:
-        print 'Could not write to %s' % (file_name,)
+# def save_params(file_name=None):
+#     try:
+#         with open(file_name, 'w') as f:
+#             params = {
+#                 'window': WINDOW,
+#                 'interp_freq': INTERP_FREQ,
+#                 'spline_order': SPLINE_ORDER,
+#                 'slide_rate': SLIDE_RATE,
+#                 'fft_window_func': FFT_WINDOW_FUNC.func_name,
+#                 'hrv_filter_algo': HRV_FILTER_ALGO,
+#                 'valid_rr_ratio': VALID_RR_RATIO}
+#             for param in params:
+#                 f.write('%s = %s\n' % (param, params[param]))
+#             f.close()
+#     except IOError:
+#         print 'Could not write to %s' % (file_name,)
+
 
 if __name__ == '__main__':
-    batch = False
+    global config
+    config = common.load_config()
+    #pprint(config)
+    batch = True
     if batch:
-        #for diag in common.SIGNALS:
-        diag = common.SIGNALS[3]
-        for record in diag['records'].split():
-            process_signal(record, diag['annotator'], diag['diagnosis'])
+        for diag in config['SIGNALS']:
+            for record in diag['records'].split():
+                process_signal(record, diag['annotator'], diag['diagnosis'],
+                    slide_rate=config['SLIDE_RATE'], preview=config['PREVIEW'])
     else:
-        #signals = ['16483.atr', '16773.atr']
+        records = '16483 16773'
         #signals = ['16273.atr', '16272.atr']
         #signals = ['chf04.ecg']
         #signals = ['chf05.ecg', 'chf06.ecg']
         #signals = ['nsr004.ecg']
         #for signal in signals:
         #process_signal('chf05','ecg', "CHF", preview=True)
-        for record in 's20651'.split():
-            process_signal(record, 'atr', "HYP", preview=False)
+        for record in records.split():
+            process_signal(record, 'atr', "NM1", config['SLIDE_RATE'], preview=False)
         #process_signal('16273','atr', "Normal", preview=True)
         #process_signal('nsr006','ecg', "Normal", preview=True)
         pass

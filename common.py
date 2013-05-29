@@ -2,30 +2,13 @@
 import csv
 import pylab as pl
 from pprint import pprint
+from warnings import warn
 
-SIGNALS = [
-    {'diagnosis': 'NM1',
-      'annotator': 'atr',
-      'plot_color': 'g',
-      'records': '16265 16273 16483 16773 16795 17453 18184 19090 19140 16272 16420 16539 16786 17052 18177 19088 19093 19830'},
-    {'diagnosis': 'HF1',
-      'annotator': 'ecg',
-      'plot_color': 'r',
-      'records': 'chf01 chf03 chf05 chf07 chf09 chf11 chf13 chf15 chf02 chf04 chf06 chf08 chf10 chf12 chf14'},
-    {'diagnosis': 'Hypertension',
-        'annotator': 'atr',
-        'plot_color': 'b',
-        'records': 's20031 s20121 s20221 s20471 s20551 s20651 s30691 s30751 s30791 s20051 s20131 s20341 s20481 s20561 s30661 s30741 s30752 s30801 s20101 s20171 s20411 s20501 s20581 s30681 s30742 s30761'},
-    {'diagnosis': 'HF2',
-        'annotator': 'ecg',
-        'plot_color': 'y',
-        'records': 'chf201 chf202 chf203 chf204 chf205 chf206 chf207 chf208 chf209 chf210 chf211 chf212 chf213 chf214 chf215 chf216 chf217 chf218 chf219 chf220 chf221 chf222 chf223 chf224 chf225 chf226 chf227 chf228 chf229'},
-        #'records': 'chf211 chf212 chf213 chf214 chf215 chf216 chf217 chf218 chf219 chf220 chf221 chf222 chf223 chf224 chf225 chf226 chf227 chf228 chf229'},
-     {'diagnosis': 'NM2',
-         'annotator': 'ecg',
-         'plot_color': 'c',
-         'records': 'nsr001 nsr002 nsr003 nsr004 nsr005 nsr006 nsr007 nsr008 nsr009 nsr010 nsr011 nsr012 nsr013 nsr014 nsr015 nsr016 nsr017 nsr018 nsr019 nsr020 nsr021 nsr022 nsr023 nsr024 nsr025 nsr026 nsr027 nsr028 nsr029 nsr030 nsr031 nsr032 nsr033 nsr034 nsr035 nsr036 nsr037 nsr038 nsr039 nsr040 nsr041 nsr042 nsr043 nsr044 nsr045 nsr046 nsr047 nsr048 nsr049 nsr050 nsr051 nsr052 nsr053 nsr054'}
-    ]
+def load_config(file_name="wfdb.conf"):
+    config = {}
+    execfile(file_name, config)
+    return config
+
 
 def read_signal(file_name=None):
     beta, std, cov, mean = [], [], [], []
@@ -58,55 +41,81 @@ def read_signal(file_name=None):
         return None
 
 
-def filter2d(x, y, filtration_algo='2sigma', valid_delta_ratio=.2):
+def filter2d(x, y, axes=['y'], algos=['2sigma'], valid_delta_ratio=.2):
     xnew = pl.array(x, dtype='float32')
     ynew = pl.array(y, dtype='float32')
-    if filtration_algo == 'rate20':
-        for i in range(0, len(ynew)-1):
-            if (abs(ynew[i+1] / ynew[i] - 1) > valid_delta_ratio): # current rr differs more then 20% of previous one
-                ynew[i] = 0
-                xnew[i] = 0
-        ynew = pl.ma.masked_equal(ynew,0)
-        ynew = pl.ma.compressed(ynew)
-        xnew = pl.ma.masked_equal(xnew,0)
-        xnew = pl.ma.compressed(xnew)
-    elif filtration_algo == '2sigma':
-        mean = pl.mean(ynew)
-        std = pl.std(ynew)
-      
-        for i in range(0, len(ynew)):
-            if pl.logical_or(ynew[i] < mean - 2*std, mean + 2*std < ynew[i]):
-                ynew[i] = 0
-                xnew[i] = 0
+    mask_x = pl.ones(len(x), dtype='bool')
+    mask_y = pl.ones(len(y), dtype='bool')
+    if 'y' in axes:
+        mask_y = filter1d(y,algos=algos)        
+    if 'x' in axes:
+        mask_x = filter1d(x,algos=algos)
+    mask = mask_x * mask_y
+    xnew *= mask
+    ynew *= mask
+    
+    xnew = pl.ma.masked_equal(xnew,0)
+    xnew = pl.ma.compressed(xnew)
+    ynew = pl.ma.masked_equal(ynew,0)
+    ynew = pl.ma.compressed(ynew)
 
-        ynew = pl.ma.masked_equal(ynew,0)
-        ynew = pl.ma.compressed(ynew)
-        xnew = pl.ma.masked_equal(xnew,0)
-        xnew = pl.ma.compressed(xnew)
-
-    elif filtration_algo == 'rate20_2sigma':
-        for i in range(0, len(ynew)-1):
-            if (abs(ynew[i+1] / ynew[i] - 1) > valid_delta_ratio): # current rr differs more then 20% of previous one
-                ynew[i] = 0
-                xnew[i] = 0
-        ynew = pl.ma.masked_equal(ynew,0)
-        ynew = pl.ma.compressed(ynew)
-        xnew = pl.ma.masked_equal(xnew,0)
-        xnew = pl.ma.compressed(xnew)
-
-        mean = pl.mean(ynew)
-        std = pl.std(ynew)
-      
-        for rr in range(0, len(ynew)):
-            if pl.logical_or(ynew[i] < mean - 2*std, mean + 2*std < ynew[i]):
-                ynew[i] = 0
-                xnew[i] = 0
-    else:
-       warn("Donno anything about such filtration algorithm")
-
-    print "NB: Deleted %0.2f%% intervals" % (float(len(y)-len(ynew))/len(y)*100,)
+    assert pl.shape(xnew) == pl.shape(ynew)
     return xnew, ynew
 
+def filter1d(x, return_mask=True, algos=['2sigma']):
+    xnew = pl.array(x, dtype='float32')
+    mask = pl.ones(len(x), dtype='bool')
+    for algo in algos:
+        if algo == 'diff02':
+            for i in range(0, len(xnew)-1):
+                if (abs(xnew[i+1] / xnew[i] - 1) > valid_delta_ratio): # current rr differs more then 20% of previous one
+                    mask[i] = False
+            if not return_mask:
+                xnew = xnew * mask
+                xnew = pl.ma.masked_equal(xnew,0)
+                xnew = pl.ma.compressed(xnew)
+
+        elif algo == '2sigma':
+            mean = pl.mean(xnew)
+            std = pl.std(xnew)
+            for i in range(0, len(xnew)):
+                if pl.logical_or(xnew[i] < mean - 2*std, mean + 2*std < xnew[i]):
+                    mask[i] = False
+            if not return_mask:
+                xnew = xnew * mask
+                xnew = pl.ma.masked_equal(xnew,0)
+                xnew = pl.ma.compressed(xnew)
+
+        elif algo == '5per95':
+            per5 = pl.percentile(xnew,1)
+            per95 = pl.percentile(xnew,99)
+            for i in range(0, len(xnew)):
+                if pl.logical_or(xnew[i] < per5, per95 < xnew[i]):
+                    mask[i] = False
+            if return_mask:
+                xnew = xnew * mask
+                xnew = pl.ma.masked_equal(xnew,0)
+                xnew = pl.ma.compressed(xnew)
+
+        elif algo == '3per97':
+            per3 = pl.percentile(xnew,3)
+            per97 = pl.percentile(xnew,97)
+            for i in range(0, len(xnew)):
+                if pl.logical_or(xnew[i] < per3, per97 < xnew[i]):
+                    mask[i] = False
+            if return_mask:
+                xnew = xnew * mask
+                xnew = pl.ma.masked_equal(xnew,0)
+                xnew = pl.ma.compressed(xnew)
+
+        else:
+           warn("Donno anything about such filtration algorithm")
+
+    print "NB: Deleted %0.2f%% of array" % (float(len(x)-len(xnew))/len(x)*100,)
+    if return_mask:
+        return mask
+    else:
+        return xnew, mask
 
 
 def signal_to_csv(record,time,hrv,info):
