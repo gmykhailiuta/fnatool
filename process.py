@@ -42,7 +42,8 @@ VALID_RR_RATIO = 0.2 # 0 < x < 1
 HRV_FILTER_ALGO = '2sigma' # 0 - old, rr_last / rr - 1 < 0.2; 1 - new, mean - 2 std < rr < mean + 2 std
 
 
-def _variability(r_times, filtration_algo=HRV_FILTER_ALGO, valid_rr_ratio=VALID_RR_RATIO):
+def _variability(r_times, filtration_algo=HRV_FILTER_ALGO, \
+    valid_rr_ratio=VALID_RR_RATIO):
     """
     Get HRV from RR times array.
     Parameters:
@@ -64,7 +65,8 @@ def _variability(r_times, filtration_algo=HRV_FILTER_ALGO, valid_rr_ratio=VALID_
         for i in range(1, len(r_times)):
             rr = (r_times[i]-r_times[i-1])* 1000
             if last_rr: # if first rr computed, go with validation
-                if (abs(last_rr / rr - 1) <= valid_rr_ratio) and (rr > 100) and (rr < 2000): # current rr differs less then 20% of previous one
+                if (abs(last_rr / rr - 1) <= valid_rr_ratio) and \
+                    (rr > 100) and (rr < 2000): # current rr differs less then 20% of previous one
                     rrs[i] = rr
                     last_rr = rr
                 else:
@@ -268,7 +270,8 @@ def fft_filter(time, signal, result, window_func=FFT_WINDOW_FUNC, \
         sp_spec_filt.loglog(freq_filt_abs, spec_filt_abs)
         
         pl.show()
-        pl.savefig("bandpass_%(record)s_%(frag)s.png" % result, facecolor='w', edgecolor='k', transparent=True)
+        pl.savefig("bandpass_%(record)s_%(frag)s.png" % result, facecolor='w',
+             dgecolor='k', transparent=True)
         pl.close()
 
     return freq_filt_log, spec_filt_log
@@ -294,12 +297,13 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
     info = rdhdr(record)
     if diagnosis:
         info['diagnosis'] = diagnosis
-    print "Processing %s: %s %s %s" % (record, info['gender'], info['age'], info['diagnosis'])
+    print "Processing %s: %s %s %s" % (record, info['gender'], info['age'],\
+        info['diagnosis'])
 
     # rdann(record, annotator, start=0, end=-1, types=[])
     #ann = rdann(record, annotator, start, end, [1])
     r_samples = read_r_samples(record, annotator)
-    
+
     r_times = pl.empty(len(r_samples), dtype='float32')
     r_times = r_samples / info['samp_freq']
 
@@ -316,7 +320,8 @@ def process_signal(record, annotator, diagnosis=None, start=0, end=-1,\
     time_interp, hrv_interp = interpolate(time_filt, hrv_filt)
 
     if preview:
-        plot_results.plot_hrv([time, hrv], [time_interp, hrv_interp], record, preview=preview)
+        plot_results.plot_hrv([time, hrv], [time_interp, hrv_interp], record,\
+            preview=preview)
 
     del time, hrv
 
@@ -390,7 +395,7 @@ def read_r_samples(record, annotator):
     r_samples = []
     proc = subprocess.Popen(['rdann','-r',record,'-a',annotator,'-p','N','-c','0'],bufsize=-1,stdout=subprocess.PIPE)
     for line in iter(proc.stdout.readline,''):
-        sample = line.split()[1]
+        sample = line.split('  ')[1]
         if sample.isdigit():
             #time = (ann[0])[1:-1]
             r_samples.append(int(sample))
@@ -457,8 +462,8 @@ if __name__ == '__main__':
         #signals = ['nsr004.ecg']
         #for signal in signals:
         #process_signal('chf05','ecg', "CHF", preview=True)
-        for record in 'chf202 chf203 chf204'.split():
-            process_signal(record, 'ecg', "HF2", preview=False)
+        for record in 's20651'.split():
+            process_signal(record, 'atr', "HYP", preview=False)
         #process_signal('16273','atr', "Normal", preview=True)
         #process_signal('nsr006','ecg', "Normal", preview=True)
         pass
