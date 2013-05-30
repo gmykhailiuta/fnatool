@@ -3,7 +3,7 @@ import pylab as pl
 from wfdbtools import rdhdr, rdann
 from sys import exit
 import datetime as dt
-from scipy.interpolate import splrep,splev
+from scipy import interpolate as ipl
 from pprint import pprint
 from warnings import warn
 import subprocess
@@ -47,7 +47,7 @@ def variability(r_times):
     """
 
     time = pl.delete(r_times,-1)
-    hrv = pl.zeros(len(r_times)-1, dtype='float32')
+    hrv = pl.zeros(len(r_times)-1, dtype='float')
 
     for i in range(0, len(r_times)-1):
         hrv[i] = (r_times[i+1]-r_times[i])* 1000
@@ -68,12 +68,15 @@ def interpolate(x, y, order=2):
         xnew, ynew : ndarray, Interpolated data
     """
     assert pl.shape(x) == pl.shape(y)
-    #print float((x.max()-x.min())/INTERP_FREQ)
-    #print x.min(), x.max()
-    xnew = pl.arange(x.min(), x.max(), 1.0/config['INTERP_FREQ'], dtype='float32')
-    tck = splrep(x, y, k=order, s=0)
-    ynew = splev(xnew, tck, der=0)
-    return xnew, ynew
+    xnew = pl.arange(x.min(), x.max(), 1.0/config['INTERP_FREQ'], dtype='float')
+
+    if order == 0:
+        f = ipl.interp1d(x, y, kind='linear')
+        return xnew, f(xnew)
+    else:
+        tck = ipl.splrep(x, y, k=order, s=0)
+        ynew = ipl.splev(xnew, tck, der=0)
+        return xnew, ynew
 
 
 def fft_filter(time, signal, result, window_func=pl.hanning, \
@@ -90,49 +93,78 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
         10*log10 of frequency vector
         10*log10 of specturm
     """
-    _time = time.copy()
-    _time -= min(_time) # make relative time for this fragment
+
     n = len(signal)
 
     window = window_func(n) # window
     signal_wed = signal * window
 
-    spec = pl.fftshift(pl.fft(signal_wed)) # entering to frequency domain
-    spec_filt = pl.zeros(spec.shape, dtype=complex)
-    # fftshift moves zero-frequency component 
-    # to the center of the array
-    freq = pl.fftshift(pl.fftfreq(n, 1.0/samp_freq)) # get freqs axis values
-    freq_filt = pl.zeros(freq.shape, dtype=float) # same for filtered
+    if False:
+        spec = pl.fftshift(pl.fft(signal_wed)) # entering to frequency domain
+        spec_filt = pl.zeros(spec.shape, dtype=complex)
+        # fftshift moves zero-frequency component 
+        # to the center of the array
+        freq = pl.fftshift(pl.fftfreq(n, 1.0/samp_freq)) # get freqs axis values
+        freq_filt = pl.zeros(freq.shape, dtype=float) # same for filtered
 
-    for i in range(n):  # filter by frequency
-        if freq_limit[0] <= abs(freq[i]) and abs(freq[i]) <= freq_limit[1]:
-            freq_filt[i] = freq[i]
-            spec_filt[i] = spec[i]
-        else:
-            freq_filt[i] = 0 # fill invalid frequencies with small value
-            spec_filt[i] = 0
+        for i in range(n):  # filter by frequency
+            if freq_limit[0] <= abs(freq[i]) and abs(freq[i]) <= freq_limit[1]:
+                freq_filt[i] = freq[i]
+                spec_filt[i] = spec[i]
+            else:
+                freq_filt[i] = 0 # fill invalid frequencies with small value
+                spec_filt[i] = 0
 
-    signal_filt = pl.absolute(pl.ifft(pl.ifftshift(spec_filt))) # get filtered signal
-    signal_filt_uwed = signal_filt.copy()
-    #signal_filt_uwed[1:-1] /= window[1:-1]
-    #signal_filt_uwed = signal_filt_uwed[:len(time)]
-    #signal = signal[:len(time)]
-   
-    spec_abs = pl.absolute(spec)[n/2:n]*2#/n # half of absolute spectra for orig signal
-    spec_filt_abs = pl.absolute(spec_filt)[n/2:n]*2#/n # half of absolute spectra for filt signal
-    freq_abs = freq[n/2:n] # half of absolute freqs axis for orig signal
-    freq_filt_abs = freq_filt[n/2:n] # half of absolute freqs axis for filt signal
+        signal_filt = pl.absolute(pl.ifft(pl.ifftshift(spec_filt))) # get filtered signal
+        signal_filt_uwed = signal_filt.copy()
+        #signal_filt_uwed[1:-1] /= window[1:-1]
+        #signal_filt_uwed = signal_filt_uwed[:len(time)]
+        #signal = signal[:len(time)]
+       
+        spec_abs = pl.absolute(spec)[n/2:n]*2#/n # half of absolute spectra for orig signal
+        spec_filt_abs = pl.absolute(spec_filt)[n/2:n]*2#/n # half of absolute spectra for filt signal
+        freq_abs = freq[n/2:n] # half of absolute freqs axis for orig signal
+        freq_filt_abs = freq_filt[n/2:n] # half of absolute freqs axis for filt signal
 
-    spec_filt_abs = pl.ma.masked_equal(spec_filt_abs,0) # cutt off invalid values
-    spec_filt_abs = pl.ma.compressed(spec_filt_abs)
-    freq_filt_abs = pl.ma.masked_equal(freq_filt_abs,0)
-    freq_filt_abs = pl.ma.compressed(freq_filt_abs)
+        spec_filt_abs = pl.ma.masked_equal(spec_filt_abs,0) # cutt off invalid values
+        spec_filt_abs = pl.ma.compressed(spec_filt_abs)
+        freq_filt_abs = pl.ma.masked_equal(freq_filt_abs,0)
+        freq_filt_abs = pl.ma.compressed(freq_filt_abs)
 
-    #spec_filt_abs *= 2/n # we cut off half of spectra - needs to be compensated
-    #spec_abs *= 2/n
+        #spec_filt_abs *= 2/n # we cut off half of spectra - needs to be compensated
+        #spec_abs *= 2/n
 
-    spec_filt_log = 20*pl.log10(spec_filt_abs) # for output
-    freq_filt_log = 20*pl.log10(freq_filt_abs)
+        spec_filt_log = 20*pl.log10(spec_filt_abs) # for output
+        freq_filt_log = 10*pl.log10(freq_filt_abs)
+    else:
+
+        n = len(signal)/2
+
+        spec = (pl.absolute(pl.rfft(signal_wed))[:-1]/(n))**2 # entering to frequency domain        
+        freq = pl.fftfreq(len(signal), 1.0/samp_freq)[:n] # get freqs axis values
+        spec_filt = pl.zeros(spec.shape, dtype='float')
+        freq_filt = pl.zeros(freq.shape, dtype='float') # same for filtered
+
+
+        for i in range(n):  # filter by frequency
+            if freq_limit[0] <= abs(freq[i]) and abs(freq[i]) <= freq_limit[1]:
+                freq_filt[i] = freq[i]
+                spec_filt[i] = spec[i]
+            else:
+                freq_filt[i] = 0 # fill invalid frequencies with 0 value
+                spec_filt[i] = 0
+
+        spec_filt = pl.ma.masked_equal(spec_filt,0) # cutt off invalid values
+        spec_filt = pl.ma.compressed(spec_filt)
+        freq_filt = pl.ma.masked_equal(freq_filt,0)
+        freq_filt = pl.ma.compressed(freq_filt)
+
+        #spec_filt_abs *= 2/n # we cut off half of spectra - needs to be compensated
+        #spec_abs *= 2/n
+
+        spec_filt_log = pl.log10(spec_filt) # for output
+        freq_filt_log = pl.log10(freq_filt)
+    
 
     #pl.figure()
     # p, f = pl.psd(signal, NFFT=len(signal), Fs=samp_freq, pad_to=len(signal)*4)
@@ -162,9 +194,9 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
         sp_sig.set_title("Original signal")
         sp_sig.set_xlabel(r"Time, s")
         sp_sig.set_ylabel(r"HRV, ms")
-        sp_sig.set_xlim(min(_time),max(_time))
+        sp_sig.set_xlim(min(time),max(time))
         sp_sig.set_ylim(min(signal),max(signal))
-        sp_sig.plot(_time, signal)
+        sp_sig.plot(time, signal)
 
         sp_spec = fig.add_subplot(222)
         sp_spec.set_title("Original signal - Fourier Specturm")
@@ -179,7 +211,7 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
         sp_sig_filt.set_xlabel(r"Time, s")
         sp_sig_filt.set_ylabel(r"HRV, ms")
         #sp_sig_filt.set_ylim(min(signal_filt_uwed),max(signal_filt_uwed))
-        sp_sig_filt.plot(_time, signal_filt_uwed)
+        sp_sig_filt.plot(time, signal_filt_uwed)
         
         sp_spec_filt = pl.subplot(224, sharex=sp_spec, sharey=sp_spec)
         sp_spec_filt.set_title("Filtered signal - Fourier Specturm")
@@ -223,7 +255,7 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
     #ann = rdann(record, annotator, start, end, [1])
     r_samples = read_r_samples(record, annotator)
 
-    r_times = pl.empty(len(r_samples), dtype='float32')
+    r_times = pl.empty(len(r_samples), dtype='float')
     r_times = r_samples / info['samp_freq']
 
     del r_samples
@@ -240,7 +272,7 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
     time_interp, hrv_interp = interpolate(time_filt, hrv_filt, config['SPLINE_ORDER'])
 
     if preview:
-        plot_results.plot_hrv([time, hrv], [time_interp, hrv_interp], record,\
+        plot_results.plot_hrv([time, hrv], [time_filt, hrv_filt], [time_interp, hrv_interp], record,\
             preview=preview)
 
     del time, hrv
@@ -284,19 +316,29 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         result['time_from'] = r_first_full.strftime("%H:%M:%S")
         result['time_to'] = r_last_full.strftime("%H:%M:%S")
 
-        result['std'] = (hrv_interp[frag_beg: frag_end]).std()
-        result['mean'] = (hrv_interp[frag_beg: frag_end]).mean()
+        time_frag = pl.empty(window, dtype='float')
+        time_frag = time_interp[frag_beg: frag_end]
+        time_frag -= time_frag.min()
+        hrv_frag = pl.empty(window, dtype='float')
+        hrv_frag = hrv_interp[frag_beg: frag_end]
+
+        result['std'] = hrv_frag.std()
+        result['mean'] = hrv_frag.mean()
         result['cov'] = result['std']/result['mean']*100
 
-        freq_filt, fft_filt = fft_filter(time_interp[frag_beg: frag_end], \
-                hrv_interp[frag_beg: frag_end],\
+        hrv_frag -= result['mean']
+
+        freq_filt, fft_filt = fft_filter(time_frag, \
+                hrv_frag,\
                 result,\
                 window_func=getattr(pl, config['FFT_WINDOW_FUNC']),\
                 samp_freq=config['INTERP_FREQ'],\
                 freq_limit = config['FREQ_LIMIT'],\
                 preview=preview)
+        del time_frag, hrv_frag
 
         _a,_b = approximate(freq_filt,fft_filt)
+
         result['beta'] = -_a
         line_y = [_a*x+_b for x in freq_filt]
         plot_results.plot_beta(freq_filt, fft_filt, line_y, result, preview=preview)

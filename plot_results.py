@@ -5,6 +5,8 @@ from scipy.cluster.vq import kmeans2
 from warnings import warn
 import itertools
 import common
+A4_WIDTH = 11.7
+A4_HEIGHT = 8.3
 
 def draw(in1,in2=None,label="",show=False):  
     pl.figure(facecolor='white')
@@ -16,7 +18,7 @@ def draw(in1,in2=None,label="",show=False):
         pl.show()
     exit(0)
 
-def plot_hrv(hrv, hrv_interp, record, preview=False):
+def plot_hrv(hrv, hrv_filt, hrv_interp, record, preview=False):
     """
     Plot HRV and it's approximation.
     In:
@@ -25,12 +27,22 @@ def plot_hrv(hrv, hrv_interp, record, preview=False):
         hrv_interp : list, [time_interp, hrv_interp], ndarray,ndarray
             Interpolated time & hrv vectors
     """
-    fig = pl.figure("signals")
-    pl.plot(hrv[0], hrv[1], 'or')
-    pl.title(record)
-    pl.ylabel('HRV (s)') 
-    pl.plot(hrv_interp[0], hrv_interp[1], 'k')
+    fig = pl.figure("signals", figsize=(2*A4_WIDTH, 2*A4_HEIGHT), facecolor='white')
+    pl.suptitle(record)
+    sp_orig = pl.subplot(311)
+    pl.title("Original signal")
+    pl.ylabel('RR interval (ms)') 
+    pl.plot(hrv[0], hrv[1], color='b', marker='.', linestyle='--', alpha=.5)
+    sp_filt = pl.subplot(312,sharex=sp_orig,sharey=sp_orig)
+    pl.title("Filtered signal")
+    pl.ylabel('RR interval (ms)') 
+    pl.plot(hrv_filt[0], hrv_filt[1], color='b', marker='.', linestyle='--', alpha=.5)
+    sp_filt = pl.subplot(313,sharex=sp_orig,sharey=sp_orig)
+    pl.title("Interpolated signal")
+    pl.ylabel('RR interval (ms)') 
     pl.xlabel('Time (s)')
+    pl.plot(hrv_interp[0], hrv_interp[1], color='k')
+    pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
     if preview:
         pl.show()
     pl.close()
@@ -384,7 +396,9 @@ def plot_homeostasis_interp(preview=False):
 if __name__ == '__main__':
     global config
     config = common.load_config()
-    #plot_homeostasis(1)
-    boxplot_diagnosis(1)
-    #plot_clusters(1)
-    #plot_homeostasis_interp(1)
+    preview = False
+    
+    plot_homeostasis(preview)
+    boxplot_diagnosis(preview)
+    plot_clusters(preview)
+    plot_homeostasis_interp(preview)

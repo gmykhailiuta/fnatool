@@ -42,8 +42,8 @@ def read_signal(file_name=None):
 
 
 def filter2d(x, y, axes=['y'], algos=['2sigma'], valid_delta_ratio=.2):
-    xnew = pl.array(x, dtype='float32')
-    ynew = pl.array(y, dtype='float32')
+    xnew = pl.array(x, dtype='float')
+    ynew = pl.array(y, dtype='float')
     mask_x = pl.ones(len(x), dtype='bool')
     mask_y = pl.ones(len(y), dtype='bool')
     if 'y' in axes:
@@ -62,15 +62,15 @@ def filter2d(x, y, axes=['y'], algos=['2sigma'], valid_delta_ratio=.2):
     assert pl.shape(xnew) == pl.shape(ynew)
     return xnew, ynew
 
-def filter1d(x, return_mask=True, algos=['2sigma']):
-    xnew = pl.array(x, dtype='float32')
+def filter1d(x, mask_only=True, algos=['2sigma']):
+    xnew = pl.array(x, dtype='float')
     mask = pl.ones(len(x), dtype='bool')
     for algo in algos:
         if algo == 'diff02':
             for i in range(0, len(xnew)-1):
                 if (abs(xnew[i+1] / xnew[i] - 1) > valid_delta_ratio): # current rr differs more then 20% of previous one
                     mask[i] = False
-            if not return_mask:
+            if not mask_only:
                 xnew = xnew * mask
                 xnew = pl.ma.masked_equal(xnew,0)
                 xnew = pl.ma.compressed(xnew)
@@ -81,7 +81,7 @@ def filter1d(x, return_mask=True, algos=['2sigma']):
             for i in range(0, len(xnew)):
                 if pl.logical_or(xnew[i] < mean - 2*std, mean + 2*std < xnew[i]):
                     mask[i] = False
-            if not return_mask:
+            if not mask_only:
                 xnew = xnew * mask
                 xnew = pl.ma.masked_equal(xnew,0)
                 xnew = pl.ma.compressed(xnew)
@@ -92,7 +92,7 @@ def filter1d(x, return_mask=True, algos=['2sigma']):
             for i in range(0, len(xnew)):
                 if pl.logical_or(xnew[i] < per5, per95 < xnew[i]):
                     mask[i] = False
-            if return_mask:
+            if not mask_only:
                 xnew = xnew * mask
                 xnew = pl.ma.masked_equal(xnew,0)
                 xnew = pl.ma.compressed(xnew)
@@ -103,7 +103,17 @@ def filter1d(x, return_mask=True, algos=['2sigma']):
             for i in range(0, len(xnew)):
                 if pl.logical_or(xnew[i] < per3, per97 < xnew[i]):
                     mask[i] = False
-            if return_mask:
+            if not mask_only:
+                xnew = xnew * mask
+                xnew = pl.ma.masked_equal(xnew,0)
+                xnew = pl.ma.compressed(xnew)
+
+        elif algo == 'ho_moody':
+            for i in range(2, len(xnew)-2):
+                mean = pl.mean([xnew[i-2],xnew[i-1],xnew[i+1],xnew[i+2]])
+                if pl.logical_or(xnew[i] < .8 * mean, 1.2 * mean < xnew[i]):
+                    mask[i] = False
+            if not mask_only:
                 xnew = xnew * mask
                 xnew = pl.ma.masked_equal(xnew,0)
                 xnew = pl.ma.compressed(xnew)
@@ -112,7 +122,7 @@ def filter1d(x, return_mask=True, algos=['2sigma']):
            warn("Donno anything about such filtration algorithm")
 
     print "NB: Deleted %0.2f%% of array" % (float(len(x)-len(xnew))/len(x)*100,)
-    if return_mask:
+    if mask_only:
         return mask
     else:
         return xnew, mask
