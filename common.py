@@ -41,7 +41,7 @@ def read_signal(file_name=None):
         return None
 
 
-def filter2d(x, y, axes=['y'], algos=['2sigma'], valid_delta_ratio=.2):
+def filter2d(x, y, axes=['y'], algos=['2sigma']):
     xnew = pl.array(x, dtype='float')
     ynew = pl.array(y, dtype='float')
     mask_x = pl.ones(len(x), dtype='bool')
@@ -68,7 +68,7 @@ def filter1d(x, mask_only=True, algos=['2sigma']):
     for algo in algos:
         if algo == 'diff02':
             for i in range(0, len(xnew)-1):
-                if (abs(xnew[i+1] / xnew[i] - 1) > valid_delta_ratio): # current rr differs more then 20% of previous one
+                if (abs(xnew[i+1] / xnew[i] - 1) > .2): # current rr differs more then 20% of previous one
                     mask[i] = False
             if not mask_only:
                 xnew = xnew * mask
@@ -87,8 +87,9 @@ def filter1d(x, mask_only=True, algos=['2sigma']):
                 xnew = pl.ma.compressed(xnew)
 
         elif algo == '5per95':
-            per5 = pl.percentile(xnew,1)
-            per95 = pl.percentile(xnew,99)
+            per5 = pl.percentile(xnew,5)
+            per95 = pl.percentile(xnew,95)
+            #print per5,per95
             for i in range(0, len(xnew)):
                 if pl.logical_or(xnew[i] < per5, per95 < xnew[i]):
                     mask[i] = False
@@ -108,6 +109,17 @@ def filter1d(x, mask_only=True, algos=['2sigma']):
                 xnew = pl.ma.masked_equal(xnew,0)
                 xnew = pl.ma.compressed(xnew)
 
+        elif algo == '1per99':
+            per1 = pl.percentile(xnew,1)
+            per99 = pl.percentile(xnew,99)
+            for i in range(0, len(xnew)):
+                if pl.logical_or(xnew[i] <= per1, per99 <= xnew[i]):
+                    mask[i] = False
+            if not mask_only:
+                xnew = xnew * mask
+                xnew = pl.ma.masked_equal(xnew,0)
+                xnew = pl.ma.compressed(xnew)
+
         elif algo == 'ho_moody':
             for i in range(2, len(xnew)-2):
                 mean = pl.mean([xnew[i-2],xnew[i-1],xnew[i+1],xnew[i+2]])
@@ -121,7 +133,7 @@ def filter1d(x, mask_only=True, algos=['2sigma']):
         else:
            warn("Donno anything about such filtration algorithm")
 
-    print "NB: Deleted %0.2f%% of array" % (float(len(x)-len(xnew))/len(x)*100,)
+    print "NB: Deleted %0.3f%% of array" % (float(len(x)-pl.sum(mask))/len(x)*100,)
     if mask_only:
         return mask
     else:

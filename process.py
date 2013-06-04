@@ -145,14 +145,14 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
         spec_filt = pl.zeros(spec.shape, dtype='float')
         freq_filt = pl.zeros(freq.shape, dtype='float') # same for filtered
 
-
         for i in range(n):  # filter by frequency
-            if freq_limit[0] <= abs(freq[i]) and abs(freq[i]) <= freq_limit[1]:
+            if pl.logical_and(freq_limit[0] <= abs(freq[i]), abs(freq[i]) <= freq_limit[1]):
                 freq_filt[i] = freq[i]
                 spec_filt[i] = spec[i]
             else:
                 freq_filt[i] = 0 # fill invalid frequencies with 0 value
                 spec_filt[i] = 0
+
 
         spec_filt = pl.ma.masked_equal(spec_filt,0) # cutt off invalid values
         spec_filt = pl.ma.compressed(spec_filt)
@@ -236,6 +236,7 @@ def approximate(x,y):
     Out:
         a, b : float, as in a*x+b=y
     """
+    assert pl.shape(x) == pl.shape(y)
     A = pl.vstack([x, pl.ones(len(x))]).T
     a, b = pl.lstsq(A, y)[0]
     return a, b
@@ -267,7 +268,7 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
     del r_times
 
     time_filt, hrv_filt = common.filter2d(time, hrv,\
-        algos=config['HRV_FILTER_ALGO'], valid_delta_ratio=config['VALID_DELTA_RATIO'])
+        algos=config['HRV_FILTER_ALGO'])
     #print pl.shape(time_filt), pl.shape(hrv_filt)
     time_interp, hrv_interp = interpolate(time_filt, hrv_filt, config['SPLINE_ORDER'])
 
@@ -337,6 +338,11 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
                 preview=preview)
         del time_frag, hrv_frag
 
+        # Dirty hack just for case when we have constant signal in window, 
+        # and signal - mean = 0, so filter in fft_filter returns empty PSD
+        if pl.shape(freq_filt) != pl.shape(fft_filt):
+            print "shape(freq) != shape(spec). Maybe, got constant signal in window. Passing by..."
+            continue
         _a,_b = approximate(freq_filt,fft_filt)
 
         result['beta'] = -_a
@@ -360,6 +366,7 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
 
 def read_r_samples(record, annotator):
     r_samples = []
+    # Faster for 25% ann2rr -r 16265 -a atr -v s8 -i s8 -P N -p N
     proc = subprocess.Popen(['rdann','-r',record,'-a',annotator,'-p','N','-c','0'],bufsize=-1,stdout=subprocess.PIPE)
     for line in iter(proc.stdout.readline,''):
         sample = line.split('  ')[1]
@@ -408,8 +415,8 @@ if __name__ == '__main__':
                 process_signal(record, diag['annotator'], diag['diagnosis'],
                     slide_rate=config['SLIDE_RATE'], preview=config['PREVIEW'])
     else:
-        #records = '16483 16773'
-        records = '16483 16773 16795 17453'
+        records = 'nsr001 nsr002 nsr003 nsr004 nsr005 nsr006 nsr007 nsr008 nsr009 nsr010 nsr011 nsr012 nsr013 nsr014 nsr015 nsr016 nsr017 nsr018 nsr019 nsr020 nsr021 nsr022 nsr023 nsr024 nsr025 nsr026 nsr027 nsr028 nsr029 nsr030 nsr031 nsr032 nsr033 nsr034 nsr035 nsr036 nsr037 nsr038 nsr039 nsr040 nsr041 nsr042 nsr043 nsr044 nsr045 nsr046 nsr047 nsr048 nsr049 nsr050 nsr051 nsr052 nsr053 nsr054'
+        #records = '16483 16773 16795 17453'
         #signals = ['16273.atr', '16272.atr']
         #signals = ['chf04.ecg']
         #signals = ['chf05.ecg', 'chf06.ecg']
@@ -417,7 +424,7 @@ if __name__ == '__main__':
         #for signal in signals:
         #process_signal('chf05','ecg', "CHF", preview=True)
         for record in records.split():
-            process_signal(record, 'atr', "NM1", config['SLIDE_RATE'], preview=False)
+            process_signal(record, 'ecg', "NM2", config['SLIDE_RATE'], preview=False)
         #process_signal('16273','atr', "Normal", preview=True)
         #process_signal('nsr006','ecg', "Normal", preview=True)
         pass

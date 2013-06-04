@@ -125,7 +125,8 @@ def plot_homeostasis(preview=False):
         pl.ylabel(r"$\beta$", fontsize=18)
         pl.grid()
         #print len(records_stat[0]),len(records_stat[1]),len(records_stat[2])
-        std, beta = common.filter2d(records_stat[1], records_stat[0], axes=['x','y'], algos=['5per95'])
+        #std, beta = common.filter2d(records_stat[1], records_stat[0], axes=['x','y'], algos=['5per95'])
+        std, beta = records_stat[1], records_stat[0]
         #std, beta = records_stat[1], records_stat[0]
         sp_beta_std.scatter(std,beta,label=db['diagnosis'],color=db['plot_color'])
 
@@ -134,7 +135,8 @@ def plot_homeostasis(preview=False):
         pl.axhline(y=1,color='k')
         pl.xlabel(r"$\sigma/\bar{x}$", fontsize=18)
         pl.grid()
-        cov, beta = common.filter2d(records_stat[2], records_stat[0], axes=['x','y'], algos=['5per95'])
+        #cov, beta = common.filter2d(records_stat[2], records_stat[0], axes=['x','y'], algos=['5per95'])
+        cov, beta = records_stat[2], records_stat[0]
         #cov, beta = records_stat[2], records_stat[0]
         sp_beta_cov.scatter(cov,beta,label=db['diagnosis'],color=db['plot_color'])
 
@@ -168,9 +170,11 @@ def plot_homeostasis(preview=False):
     pl.xlabel(r"$\sigma/\bar{x}$", fontsize=18)
     pl.grid()
     for db in config['SIGNALS']:
-        std, beta = common.filter2d(diagnosis_stat[1], diagnosis_stat[0], axes=['x','y'], algos=['5per95'])
+        #std, beta = common.filter2d(diagnosis_stat[1], diagnosis_stat[0], axes=['x','y'], algos=['5per95'])
+        std, beta = diagnosis_stat[1], diagnosis_stat[0]
         sp_beta_std.scatter(diagnosis_stat[1],diagnosis_stat[0],label=db['diagnosis'],color=db['plot_color'],marker='x')
-        cov, beta = common.filter2d(diagnosis_stat[2], diagnosis_stat[0], axes=['x','y'], algos=['5per95'])
+        #cov, beta = common.filter2d(diagnosis_stat[2], diagnosis_stat[0], axes=['x','y'], algos=['5per95'])
+        cov, beta = diagnosis_stat[2], diagnosis_stat[0]
         sp_beta_cov.scatter(cov,beta,label=db['diagnosis'],color=db['plot_color'],marker='x')
 
     pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
@@ -393,12 +397,107 @@ def plot_homeostasis_interp(preview=False):
         pl.close()
 
 
+def plot_homeostasis_median(preview=False):
+    global config
+    #legend = []
+    diagnosis_stat = [[],[],[]]
+    for db in config['SIGNALS']:
+        records_stat = [[],[],[]]
+        for record in db['records'].split():
+            signal = common.read_signal("results_%s.csv" % record)
+            if signal:
+                records_stat[0].append(signal['beta'])
+                records_stat[1].append(signal['std'])
+                records_stat[2].append(signal['cov'])
+        #std, beta = common.filter2d(records_stat[1], records_stat[0], axes=['x','y'], algos=['5per95'])
+        #std, beta = pl.median(records_stat[1]), pl.median(records_stat[0])
+        #std, beta = records_stat[1], records_stat[0]
+        #cov, beta = common.filter2d(records_stat[2], records_stat[0], axes=['x','y'], algos=['5per95'])
+        #cov, beta = pl.median(records_stat[2]), pl.median(records_stat[0])
+        #cov, beta = records_stat[2], records_stat[0]
+
+        beta = [pl.median(x) for x in records_stat[0]]
+        std = [pl.median(x) for x in records_stat[1]]
+        cov = [pl.median(x) for x in records_stat[2]]
+
+        fig = pl.figure("stochastic_homeostasis_median_%s" % db['diagnosis'], figsize=(22, 11), facecolor='white')
+        fig.suptitle('Stochastic homeostasis of %s database (medians)' % db['diagnosis'], fontsize=20)        
+        sp_beta_std = pl.subplot(121)
+        pl.ylim(0,2)
+        pl.xlim(0,140)
+        pl.axhline(y=1,color='k')
+        pl.axvline(x=70,color='k')
+        pl.xlabel(r"$\sigma\ (ms)$", fontsize=18)
+        pl.ylabel(r"$\beta$", fontsize=18)
+        pl.grid()
+        sp_beta_std.scatter(std,beta,label=db['diagnosis'],color=db['plot_color'])
+
+        sp_beta_cov = pl.subplot(122, sharey=sp_beta_std)
+        pl.xlim(0,50)
+        pl.axhline(y=1,color='k')
+        pl.xlabel(r"$\sigma/\bar{x}$", fontsize=18)
+        pl.grid()
+        sp_beta_cov.scatter(cov,beta,label=db['diagnosis'],color=db['plot_color'])
+
+        pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
+        pl.savefig("stochastic_homeostasis_median_diagnosis_%s.png" % (db['diagnosis'],),facecolor='w',edgecolor='k',transparent=True)
+        if preview:
+            pl.show()
+        for i in range(3):
+            diagnosis_stat[i].append(list(itertools.chain.from_iterable(records_stat[i])))
+        #for i in range(3):
+        #    diagnosis_stat[i].apend(pl.mean(records_stat[i]))
+        #legend.append(db['diagnosis'][:3])
+        #print db['diagnosis'][:2]
+
+
+    beta = [pl.median(x) for x in diagnosis_stat[0]]
+    std = [pl.median(x) for x in diagnosis_stat[1]]
+    cov = [pl.median(x) for x in diagnosis_stat[2]]        
+
+    pl.figure("stochastic_homeostasis_medians_summary", figsize=(22, 11), facecolor='white')
+    pl.title(r'$\beta$ by desease')
+    pl.suptitle('Stochastic homeostasis by diagnosis (meadians)', fontsize=20) 
+    
+    sp_beta_std = pl.subplot(121)
+    pl.ylim(0,2)
+    pl.xlim(0,140)
+    pl.axhline(y=1,color='k')
+    pl.axvline(x=70,color='k')
+    pl.xlabel(r"$\sigma\ (ms)$", fontsize=18)
+    pl.ylabel(r"$\beta$", fontsize=18)
+    pl.grid()
+
+    sp_beta_cov = pl.subplot(122, sharey=sp_beta_std)
+    pl.xlim(0,50)
+    pl.axhline(y=1,color='k')
+    pl.xlabel(r"$\sigma/\bar{x}$", fontsize=18)
+    pl.grid()
+
+    for i in range(len(config['SIGNALS'])):
+        db = config['SIGNALS'][i]
+        sp_beta_std.scatter(std[i],beta[i],label=db['diagnosis'],color=db['plot_color'],marker='o')
+        sp_beta_cov.scatter(cov[i],beta[i],label=db['diagnosis'],color=db['plot_color'],marker='o')
+
+    pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
+    sp_beta_cov.legend(loc='best')
+    pl.savefig("stochastic_homeostasis_meadians_diagnosis.png",facecolor='w',edgecolor='k',transparent=True)
+    if preview:
+        pl.show()
+    pl.close()
+
+
 if __name__ == '__main__':
     global config
     config = common.load_config()
-    preview = False
-    
-    plot_homeostasis(preview)
-    boxplot_diagnosis(preview)
-    plot_clusters(preview)
-    plot_homeostasis_interp(preview)
+    preview = True
+    #print "Homeostasis"
+    #plot_homeostasis(preview)
+    #exit(0)
+    #print "Boxplots"
+    #boxplot_diagnosis(preview)
+    #print "Clusters"
+    #plot_clusters(preview)
+    #print "Homeostasis interpolated"
+    #plot_homeostasis_interp(preview)
+    plot_homeostasis_median(preview)
