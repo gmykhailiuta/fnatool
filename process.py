@@ -227,21 +227,6 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
     return freq_filt_log, spec_filt_log
 
 
-def approximate(x,y):
-    """
-    Linear approximation of y=f(x)
-    In:
-        x : ndarray
-        y : ndarray
-    Out:
-        a, b : float, as in a*x+b=y
-    """
-    assert pl.shape(x) == pl.shape(y)
-    A = pl.vstack([x, pl.ones(len(x))]).T
-    a, b = pl.lstsq(A, y)[0]
-    return a, b
-
-
 def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         preview=False):
     global config
@@ -279,13 +264,23 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
     del time, hrv
 
     #signal_to_csv(record, time, hrv, info)
-  
+
     window = config['INTERP_FREQ'] * config['WINDOW']
 
     if window % 2 != 0:
         warn("Window (%s) is not even. Adjust INTERP_FREQ and/or WINDOW parameters to be x**2" % (window, ))
     if not (window != 0 and ((window & (window - 1)) == 0)):
         warn("Window (%s) is not power of 2. Adjust INTERP_FREQ and/or WINDOW parameters" % (window, ))
+
+    # pl.figure()
+    # sp = pl.subplot(111)
+    # Pxx, freq, bins, im = pl.specgram(hrv_interp, NFFT=window, Fs=config['INTERP_FREQ'], detrend=pl.detrend_linear, window=pl.window_none, pad_to=4*window, sides='onesided', noverlap=32)
+    # sp.pcolor(bins, freq, Pxx)
+    # sp.set_yscale('log')
+    # #sp.set_xscale('log')
+    # #pl.colorbar()
+    # pl.show()
+    # pl.close()
 
     frag_count = int((len(time_interp) - window) / window / slide_rate)
     results = []
@@ -343,20 +338,32 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         if pl.shape(freq_filt) != pl.shape(fft_filt):
             print "shape(freq) != shape(spec). Maybe, got constant signal in window. Passing by..."
             continue
-        _a,_b = approximate(freq_filt,fft_filt)
+        
+        #result['freq'] = freq_filt
+        #result['spec'] = fft_filt
+
+        _a,_b = common.approximate(freq_filt,fft_filt)
 
         result['beta'] = -_a
-        line_y = [_a*x+_b for x in freq_filt]
-        plot_results.plot_beta(freq_filt, fft_filt, line_y, result, preview=preview)
+        if result['frag'] % 100 == 0:
+            line_y = [_a*x+_b for x in freq_filt]
+            plot_results.plot_beta(freq_filt, fft_filt, line_y, result, preview=preview)
+            del line_y
 
         #if beta_limit[0] <= result['beta'] and result['beta'] <= beta_limit[1]:
         results.append(result)
         print "%(frag)03d/%(frag_count)03d: %(time_from)s - %(time_to)s\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % dict(result.items()+{'frag_count':frag_count}.items())
-        del frag_beg, frag_end, freq_filt, fft_filt, line_y
+        del frag_beg, frag_end, freq_filt, fft_filt
 
     if results:
         stats(results)
         results_to_csv(results, record, info)
+        #pl.figure()
+        #pl.yscale('symlog', linthreshy=0.01)
+        #freqs = pl.fftfreq(window, 1.0/config['INTERP_FREQ'])[:window/2]
+        #pl.pcolormesh(pl.arange(frag_count), freqs, [r['spec'] for r in results])
+        #ax2.axis('tight')
+
         plot_results.plot_beta_std(results, preview=preview)
         plot_results.plot_beta_cv(results, preview=preview)
     else:
@@ -408,7 +415,7 @@ if __name__ == '__main__':
     global config
     config = common.load_config()
     #pprint(config)
-    batch = True
+    batch = False
     if batch:
         for diag in config['SIGNALS']:
             for record in diag['records'].split():

@@ -148,3 +148,17 @@ def signal_to_csv(record,time,hrv,info):
         outfile.write(line)
     outfile.close()
 
+
+def approximate(x,y):
+    """
+    Linear approximation of y=f(x)
+    In:
+        x : ndarray
+        y : ndarray
+    Out:
+        a, b : float, as in a*x+b=y
+    """
+    assert pl.shape(x) == pl.shape(y)
+    A = pl.vstack([x, pl.ones(len(x))]).T
+    a, b = pl.lstsq(A, y)[0]
+    return a, b

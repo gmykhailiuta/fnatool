@@ -2,7 +2,9 @@
 import pylab as pl
 from pprint import pprint
 from scipy.cluster.vq import kmeans2
+import scipy.interpolate as ip
 from warnings import warn
+from convex_hull import convex_hull
 import itertools
 import common
 A4_WIDTH = 11.7
@@ -94,10 +96,9 @@ def plot_beta(freq, fft, aprox_y, result, preview=False):
     pl.xlabel(r"$\lg f$")
     pl.ylabel(r"$\lg S$")
     pl.grid()
-    if result['frag'] == 1:
-        pl.savefig("beta_%(record)s_%(frag)s.png" % result,facecolor='w',edgecolor='k',transparent=True)
-        if preview:
-            pl.show()
+    pl.savefig("beta_%(record)s_%(frag)s.png" % result,facecolor='w',edgecolor='k',transparent=True)
+    if preview:
+        pl.show()
     pl.close()
 
 
@@ -486,6 +487,98 @@ def plot_homeostasis_median(preview=False):
         pl.show()
     pl.close()
 
+def plot_homeostasis_contour(preview=False):
+    global config
+    #legend = []
+    # diagnosis_stat = [[],[],[]]
+    fig, (sp1, sp2) = pl.subplots(1,2,sharey=True,sharex=False,figsize=(22, 11),num="stochastic_homeostasis_contours_summary")
+    fig.suptitle('Stochastic homeostasis by diagnosis (contours)', fontsize=20)
+    for i in range(len(config['SIGNALS'])):
+        db = config['SIGNALS'][i]
+        records_stat = [[],[],[]]
+        for record in db['records'].split():
+            signal = common.read_signal("results_%s.csv" % record)
+            if signal:
+                records_stat[0].extend(signal['beta'])
+                records_stat[1].extend(signal['std'])
+                records_stat[2].extend(signal['cov'])
+
+        std, beta = common.filter2d(records_stat[1], records_stat[0], axes=['x','y'], algos=['1per99'])
+        ch1 = convex_hull(pl.transpose(zip(std,beta)),False)
+        cov, beta = common.filter2d(records_stat[2], records_stat[0], axes=['x','y'], algos=['1per99'])
+        ch2 = convex_hull(pl.transpose(zip(cov,beta)),False)
+        sp1.fill(ch1[:,0],ch1[:,1],label=db['diagnosis'],color=db['plot_color'],alpha=.2,lw=2)
+        sp2.fill(ch2[:,0],ch2[:,1],label=db['diagnosis'],color=db['plot_color'],alpha=.2,lw=2)
+
+
+    sp1.axhline(y=1,color='r', linestyle='--',alpha=.5)
+    sp1.axvline(x=70,color='r', linestyle='--',alpha=.5)
+    sp1.set_ylim(0,2.5)
+    sp1.set_xlim(0,140)
+    sp1.set_xlabel(r"$\sigma\ (ms)$", fontsize=18)
+    sp1.set_ylabel(r"$\beta$", fontsize=18)
+    sp1.grid()
+        
+    sp2.axhline(y=1,color='r',linestyle='--',alpha=.5)
+    sp2.set_xlim(0,100)
+    sp2.set_xlabel(r"$\sigma/\bar{x}$", fontsize=18)
+    sp2.grid()
+
+    pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
+    sp2.legend(loc='best')
+    pl.savefig("stochastic_homeostasis_contours_diagnosis.png",facecolor='w',edgecolor='k',transparent=True)
+    if preview:
+        pl.show()
+    pl.close()
+
+
+def plot_homeostasis_contour_median(preview=False):
+    global config
+    fig, (sp1, sp2) = pl.subplots(1,2,sharey=True,sharex=False,figsize=(22, 11),num="stochastic_homeostasis_contours_median_summary")
+    fig.suptitle('Stochastic homeostasis by diagnosis (contours_medians)', fontsize=20)
+    for db in config['SIGNALS']:
+        records_stat = [[],[],[]]
+        for record in db['records'].split():
+            signal = common.read_signal("results_%s.csv" % record)
+            if signal:
+                records_stat[0].append(pl.median(signal['beta']))
+                records_stat[1].append(pl.median(signal['std']))
+                records_stat[2].append(pl.median(signal['cov']))
+
+        ch1 = convex_hull(pl.transpose(zip(records_stat[1], records_stat[0])),False)
+        ch2 = convex_hull(pl.transpose(zip(records_stat[2], records_stat[0])),False)
+        sp1.fill(ch1[:,0],ch1[:,1],label=db['diagnosis'],color=db['plot_color'],alpha=.2,lw=1)
+        sp2.fill(ch2[:,0],ch2[:,1],label=db['diagnosis'],color=db['plot_color'],alpha=.2,lw=1)
+        sp1.fill(ch1[:,0],ch1[:,1],color=db['plot_color'],alpha=.5,lw=1,fill=False,linestyle='dashed')
+        sp2.fill(ch2[:,0],ch2[:,1],color=db['plot_color'],alpha=.5,lw=1,fill=False,linestyle='dashed')
+
+        x = pl.linspace(0,140,140)
+        a,b = common.approximate(records_stat[1],records_stat[0])
+        sp1.plot(x,a*x+b,color=db['plot_color'],alpha=.9,lw=2)
+        a,b = common.approximate(records_stat[2],records_stat[0])
+        sp2.plot(x,a*x+b,color=db['plot_color'],alpha=.9,lw=2)
+
+
+    sp1.axhline(y=1,color='r', linestyle='--',alpha=.5)
+    sp1.axvline(x=70,color='r', linestyle='--',alpha=.5)
+    sp1.set_ylim(0,2.2)
+    sp1.set_xlim(0,140)
+    sp1.set_xlabel(r"$\sigma\ (ms)$", fontsize=18)
+    sp1.set_ylabel(r"$\beta$", fontsize=18)
+    sp1.grid()
+        
+    sp2.axhline(y=1,color='r',linestyle='--',alpha=.5)
+    sp2.set_xlim(0,60)
+    sp2.set_xlabel(r"$\sigma/\bar{x}$", fontsize=18)
+    sp2.grid()
+
+    pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
+    sp2.legend(loc='best')
+    pl.savefig("stochastic_homeostasis_contours_median_diagnosis.png",facecolor='w',edgecolor='k',transparent=True)
+    if preview:
+        pl.show()
+    pl.close()
+
 
 if __name__ == '__main__':
     global config
@@ -500,4 +593,6 @@ if __name__ == '__main__':
     #plot_clusters(preview)
     #print "Homeostasis interpolated"
     #plot_homeostasis_interp(preview)
-    plot_homeostasis_median(preview)
+    #plot_homeostasis_median(preview)
+    #plot_homeostasis_contour(preview)
+    plot_homeostasis_contour_median(preview)
