@@ -153,39 +153,14 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
                 freq_filt[i] = 0 # fill invalid frequencies with 0 value
                 spec_filt[i] = 0
 
-
         spec_filt = pl.ma.masked_equal(spec_filt,0) # cutt off invalid values
         spec_filt = pl.ma.compressed(spec_filt)
         freq_filt = pl.ma.masked_equal(freq_filt,0)
         freq_filt = pl.ma.compressed(freq_filt)
 
-        #spec_filt_abs *= 2/n # we cut off half of spectra - needs to be compensated
-        #spec_abs *= 2/n
-
         spec_filt_log = pl.log10(spec_filt) # for output
         freq_filt_log = pl.log10(freq_filt)
     
-
-    #pl.figure()
-    # p, f = pl.psd(signal, NFFT=len(signal), Fs=samp_freq, pad_to=len(signal)*4)
-    # f_ = f.copy()
-    # p_ = p.copy()
-    # for i in range(len(f)):  # filter by frequency
-    #     if freq_limit[0] <= abs(f[i]) and abs(f[i]) <= freq_limit[1]:
-    #         f_[i] = f[i]
-    #         p_[i] = p[i]
-    #     else:
-    #         f_[i] = 0 # fill invalid frequencies with small value
-    #         p_[i] = 0
-    # f_ = pl.ma.masked_equal(f_,0) # cutt off invalid values
-    # f_ = pl.ma.compressed(f_)
-    # p_ = pl.ma.masked_equal(p_,0)
-    # p_ = pl.ma.compressed(p_)
-    #pl.figure()
-    #print len(f_)
-    #pl.plot(10*pl.log10(f_), 10*pl.log10(p_))
-    #pl.show()
-    # return 10*pl.log10(f_), 10*pl.log10(p_)
 
     if preview and (result['frag'] == 0):
         fig = pl.figure("fft", figsize=(10, 10), facecolor='white') # plotting
