@@ -24,8 +24,14 @@ def read_signal(file_name=None):
                     mean.append(float(row[5]))
                 else:
                     result['record'] = row[0]
-                    result['gender'] = row[1]
-                    result['age'] = row[2]
+                    if row[1] in ['F','M']:
+                        result['gender'] = row[1]
+                    else:
+                        result['gender'] = None
+                    if row[2].isdigit():
+                        result['age'] = row[2]
+                    else:
+                        result['age'] = None
                     result['diagnosis'] = row[3]
     except IOError:
         print 'Could not read %s' % (file_name,)

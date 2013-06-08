@@ -220,7 +220,6 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
     r_times = r_samples / info['samp_freq']
 
     del r_samples
-
     #for i in range(10):
     #    print "{0:.10f}".format(r_times[i])
     
@@ -318,9 +317,10 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         #result['spec'] = fft_filt
 
         _a,_b = common.approximate(freq_filt,fft_filt)
+        #print _b
 
         result['beta'] = -_a
-        if result['frag'] % 100 == 0:
+        if result['frag'] % 50 == 0:
             line_y = [_a*x+_b for x in freq_filt]
             plot_results.plot_beta(freq_filt, fft_filt, line_y, result, preview=preview)
             del line_y
@@ -350,13 +350,15 @@ def read_r_samples(record, annotator):
     r_samples = []
     # Faster for 25% ann2rr -r 16265 -a atr -v s8 -i s8 -P N -p N
     proc = subprocess.Popen(['rdann','-r',record,'-a',annotator,'-p','N','-c','0'],bufsize=-1,stdout=subprocess.PIPE)
+    #proc = subprocess.Popen(['ann2rr','-r',record,'-a',annotator,'-p','N','-P','N'],bufsize=-1,stdout=subprocess.PIPE)
     for line in iter(proc.stdout.readline,''):
         sample = line.split('  ')[1]
+        #sample = line.rstrip()
         if sample.isdigit():
-            #time = (ann[0])[1:-1]
             r_samples.append(int(sample))
-
-    return pl.array(r_samples, dtype=pl.uint32)
+    assert r_samples
+    #print r_samples[:2]
+    return pl.array(r_samples[1:], dtype=pl.uint32)
 
 
 def results_to_csv(results,record,info):
@@ -390,7 +392,7 @@ if __name__ == '__main__':
     global config
     config = common.load_config()
     #pprint(config)
-    batch = False
+    batch = True
     if batch:
         for diag in config['SIGNALS']:
             for record in diag['records'].split():
