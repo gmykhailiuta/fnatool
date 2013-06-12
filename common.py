@@ -3,6 +3,7 @@ import csv
 import pylab as pl
 from pprint import pprint
 from warnings import warn
+import datetime as dt
 
 def load_config(file_name="wfdb.conf"):
     config = {}
@@ -153,6 +154,13 @@ def signal_to_csv(record,time,hrv,info):
         line = "%s %s %s\n" % (i+1,t_full.strftime("%H:%M:%S.%f"),hrv[i])
         outfile.write(line)
     outfile.close()
+
+
+def elapsed_to_abs_time(seconds, base_time=None):
+    if not base_time:
+        base_time = dt.datetime(1900, 01, 01, 0, 0, 0,tzinfo=None)
+    return base_time + dt.timedelta(seconds=pl.floor(seconds),\
+        microseconds=(seconds - pl.floor(seconds))*10**6)
 
 
 def approximate(x,y):

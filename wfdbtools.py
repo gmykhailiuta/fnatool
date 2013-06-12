@@ -386,9 +386,13 @@ def rdhdr(record):
     info['samp_freq'] = float(samp_freq)
     info['samp_count'] = int(samp_count)
     if base_time != '':
-        info['base_time'] = dt.datetime.strptime(base_time, '%H:%M:%S')
+        info['base_time'] = dt.datetime(1900,01,01,0,0,0,tzinfo=None).strptime(base_time, '%H:%M:%S')
+    else:
+        info['base_time'] = None
     if base_date != '':
-        info['base_date'] = dt.datetime.strptime(base_date, '%d/%m/%Y')
+        info['base_date'] = dt.datetime(1900,01,01,0,0,0,tzinfo=None).strptime(base_date, '%d/%m/%Y')
+    else:
+        info['base_date'] = None
     
     if len(header_lines) > 1:
         for sig in range(2):

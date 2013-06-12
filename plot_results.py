@@ -2,12 +2,15 @@
 import pylab as pl
 from pprint import pprint
 from scipy.cluster.vq import kmeans2
+from matplotlib.dates import HourLocator, DateFormatter
+import datetime as dt
 import scipy.interpolate as ip
 from warnings import warn
 from convex_hull import convex_hull
 from theil_sen import theil_sen
 import itertools
 import common
+global config
 A4_WIDTH = 11.7
 A4_HEIGHT = 8.3
 
@@ -34,18 +37,52 @@ def plot_hrv(hrv, hrv_filt, hrv_interp, record, preview=False):
     pl.suptitle(record)
     sp_orig = pl.subplot(311)
     pl.title("Original signal")
-    pl.ylabel('RR interval (ms)') 
+    pl.ylabel(r"$RR_i$ (ms)") 
     pl.plot(hrv[0], hrv[1], color='b', marker='.', linestyle='--', alpha=.5)
     sp_filt = pl.subplot(312,sharex=sp_orig,sharey=sp_orig)
     pl.title("Filtered signal")
-    pl.ylabel('RR interval (ms)') 
+    pl.ylabel("$RR_i$ (ms)")
     pl.plot(hrv_filt[0], hrv_filt[1], color='b', marker='.', linestyle='--', alpha=.5)
     sp_filt = pl.subplot(313,sharex=sp_orig,sharey=sp_orig)
     pl.title("Interpolated signal")
-    pl.ylabel('RR interval (ms)') 
+    pl.ylabel(r"$RR_j$ (ms)") 
     pl.xlabel('Time (s)')
     pl.plot(hrv_interp[0], hrv_interp[1], color='k')
     pl.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
+    if preview:
+        pl.show()
+    pl.close()
+
+def plot_time(rrs, info, results, window, preview=False):
+    rr_times = pl.array([common.elapsed_to_abs_time(t[0],info['base_time']) for t in rrs])
+    beg_times = pl.array([x['time_beg'] for x in results])
+    beta = pl.array([y['beta'] for y in results],dtype='float32')
+    std = pl.array([y['std'] for y in results],dtype='float32')
+
+    fig, (sp1,sp2,sp3) = pl.subplots(3,1,sharey=False,sharex=True,figsize=(12, 12),facecolor='white',num="beta_time")
+    fig.suptitle('Parameters in time', fontsize=20)    
+    sp1.plot(rr_times, rrs[:,1], color='k')
+    sp1.vlines(beg_times,rrs[:,1].min(),rrs[:,1].min(),linestyle='solid',color=[0.7,0.7,0.7])
+    sp1.set_ylabel(r"$RR_i$ (ms)", fontsize=16)
+    sp1.grid(True)
+    sp2.bar(beg_times, beta, width=(1./24./60/60*window),fill=False)
+    sp2.axhline(y=1,color='r',linestyle='--')
+    sp2.xaxis.set_major_locator(HourLocator())
+    sp2.xaxis.set_major_formatter(DateFormatter("%H"))
+    sp2.set_ylabel(r"$\beta$", fontsize=16)
+    #sp2.xaxis.set_minor_locator(MinuteLocator(interval=15))
+    #sp2.autoscale_view()
+    #sp2.xaxis.grid(True, 'major')
+    #sp2.xaxis.grid(True, 'minor')
+    sp2.grid(True)
+    #fig.autofmt_xdate()
+    sp3.bar(beg_times, std, width=(1./24./60/60*window), fill=False)
+    sp3.axhline(y=70,color='r',linestyle='--')
+    sp3.set_ylabel(r"$\sigma$ (ms)", fontsize=16)
+    sp3.set_xlabel("Time (hours)", fontsize=16)
+    sp3.grid(True)
+    fig.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
+    fig.savefig("time_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
     if preview:
         pl.show()
     pl.close()
@@ -64,15 +101,20 @@ def plot_beta_cv(results, preview=False):
     pl.axhline(y=1,color='k',linestyle='--')
     pl.plot(x,y,'.r')
     pl.savefig("cv_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
-    if preview:  
+    if preview:
         pl.show()
     pl.close()
 
 
 def plot_beta_std(results, preview=False):
-    x = [x['std'] for x in results]
-    y = [y['beta'] for y in results]
+    x = pl.array([x['std'] for x in results])
+    y = pl.array([y['beta'] for y in results])
     pl.figure(figsize=(6, 6), facecolor='white')
+    pl.plot(x,y,'.r')
+    rx = pl.linspace(0,140,140)
+    #ra, rb = theil_sen(x,y)
+    ra, rb = common.approximate(x,y)
+    pl.plot(rx,ra*rx+rb,alpha=.9,lw=2)
     pl.title(r'%(record)s: $\beta/\sigma$' % results[0])
     pl.ylim(0,2)
     pl.xlim(0,140)
@@ -81,7 +123,6 @@ def plot_beta_std(results, preview=False):
     pl.grid()
     pl.axhline(y=1,color='k',linestyle='--')
     pl.axvline(x=70,color='k',linestyle='--')
-    pl.plot(x,y,'.r')
     pl.savefig("std_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
     if preview:
         pl.show()
@@ -92,7 +133,7 @@ def plot_beta(freq, fft, aprox_y, result, preview=False):
     pl.figure(figsize=(6, 6),facecolor='white')
     pl.plot(freq,fft,'b')
     pl.plot(freq,aprox_y,'r')
-    pl.title('%(record)s: %(time_from)s - %(time_to)s' % result)
+    pl.title('%(record)s: %(time_beg)s - %(time_end)s' % result)
     pl.xlim(min(freq),max(freq))
     pl.xlabel(r"$\lg f$")
     pl.ylabel(r"$\lg S$")
