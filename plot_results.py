@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import matplotlib as mp
+#mp.use('GtkAgg')
 import pylab as pl
 from pprint import pprint
 from scipy.cluster.vq import kmeans2
@@ -88,42 +90,69 @@ def plot_time(rrs, info, results, window, preview=False):
     pl.close()
 
 
-def plot_beta_cv(results, preview=False):
-    x = [x['cov'] for x in results]
-    y = [y['beta'] for y in results]
-    pl.figure(figsize=(6, 6), facecolor='white')
-    pl.title(r'%(record)s: $\sigma/\bar{x}$' % results[0])
-    pl.ylim(0,2)
-    pl.xlim(0,50)
-    pl.xlabel(r"$\sigma/\bar{x}$")
-    pl.ylabel(r"$\beta$")
-    pl.grid()
-    pl.axhline(y=1,color='k',linestyle='--')
-    pl.plot(x,y,'.r')
-    pl.savefig("cv_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
-    if preview:
-        pl.show()
-    pl.close()
+# def plot_beta_cv(results, preview=False):
+#     x = [x['cov'] for x in results]
+#     y = [y['beta'] for y in results]
+#     pl.figure(figsize=(6, 6), facecolor='white')
+#     pl.title(r'%(record)s: $\sigma/\bar{x}$' % results[0])
+#     pl.ylim(0,2)
+#     pl.xlim(0,50)
+#     pl.xlabel(r"$\sigma/\bar{x}$")
+#     pl.ylabel(r"$\beta$")
+#     pl.grid()
+#     pl.axhline(y=1,color='k',linestyle='--')
+#     pl.plot(x,y,'.r')
+#     pl.savefig("cv_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
+#     if preview:
+#         pl.show()
+#     pl.close()
 
 
-def plot_beta_std(results, preview=False):
-    x = pl.array([x['std'] for x in results])
-    y = pl.array([y['beta'] for y in results])
-    pl.figure(figsize=(6, 6), facecolor='white')
-    pl.plot(x,y,'.r')
-    rx = pl.linspace(0,140,140)
-    #ra, rb = theil_sen(x,y)
-    ra, rb = common.approximate(x,y)
-    pl.plot(rx,ra*rx+rb,alpha=.9,lw=2)
-    pl.title(r'%(record)s: $\beta/\sigma$' % results[0])
-    pl.ylim(0,2)
-    pl.xlim(0,140)
-    pl.xlabel(r"$\sigma$, ms")
-    pl.ylabel(r"$\beta$")
-    pl.grid()
-    pl.axhline(y=1,color='k',linestyle='--')
-    pl.axvline(x=70,color='k',linestyle='--')
-    pl.savefig("std_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
+# def plot_beta_std(results, preview=False):
+#     x = pl.array([x['std'] for x in results])
+#     y = pl.array([y['beta'] for y in results])
+#     pl.figure(figsize=(6, 6), facecolor='white')
+#     pl.plot(x,y,'.r')
+#     #rx = pl.linspace(0,140,140)
+#     #ra, rb = theil_sen(x,y)
+#     #ra, rb = common.approximate(x,y)
+#     #pl.plot(rx,ra*rx+rb,alpha=.9,lw=2)
+#     pl.title(r'%(record)s: $\beta/\sigma$' % results[0])
+#     pl.ylim(0,2)
+#     pl.xlim(0,140)
+#     pl.xlabel(r"$\sigma$, ms")
+#     pl.ylabel(r"$\beta$")
+#     pl.grid()
+#     pl.axhline(y=1,color='k',linestyle='--')
+#     pl.axvline(x=70,color='k',linestyle='--')
+#     pl.savefig("std_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
+#     if preview:
+#         pl.show()
+#     pl.close()
+
+def plot_homeostasis_record(results, preview=False):
+    std = [x['std'] for x in results]
+    cov = [x['cov'] for x in results]
+    beta = [y['beta'] for y in results]
+    fig, (sp1, sp2) = pl.subplots(1,2,sharey=True,sharex=False,figsize=(12, 6),facecolor='white',num="stochastic_homeostasis_record")
+    fig.suptitle('Stochastic homeostasis for record %(record)s' % results[0], fontsize=20) 
+    sp1.scatter(std,beta,color='b')
+    sp1.scatter(pl.mean(std),pl.mean(beta),s=200,color='b',marker='o',alpha=.5)
+    sp1.axhline(y=1,color='k',linestyle='--')
+    sp1.axvline(x=70,color='k',linestyle='--')
+    sp1.set_ylim(0,2)
+    sp1.set_xlim(0,140)
+    sp1.set_xlabel(r"$\sigma\ (ms)$", fontsize=18)
+    sp1.set_ylabel(r"$\beta$", fontsize=18)
+    sp1.grid()
+    sp2.scatter(cov,beta,color='b')
+    sp2.scatter(pl.mean(cov),pl.mean(beta),s=200,color='b',marker='o',alpha=.5)
+    sp2.axhline(y=1,color='k',linestyle='--')
+    sp2.set_xlim(0,20)
+    sp2.set_xlabel(r"$\sigma/\bar{x}$", fontsize=18)
+    sp2.grid()
+    fig.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
+    fig.savefig("homeostasis_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
     if preview:
         pl.show()
     pl.close()
@@ -180,6 +209,7 @@ def plot_homeostasis(preview=False):
         fig_diag.suptitle('Stochastic homeostasis of diagnosis %s' % db['diagnosis'], fontsize=20)
         
         sp1_diag.scatter(record_data[1],record_data[0],label=db['diagnosis'],color=db['plot_color'])
+        sp1_diag.scatter(pl.mean(record_data[1]),pl.mean(record_data[0]),s=200,color=db['plot_color'],marker='o',alpha=.5)
         sp1_diag.axhline(y=1,color='k',linestyle='--')
         sp1_diag.axvline(x=70,color='k',linestyle='--')
         sp1_diag.set_ylim(0,2)
@@ -189,6 +219,7 @@ def plot_homeostasis(preview=False):
         sp1_diag.grid()
         
         sp2_diag.scatter(record_data[2],record_data[0],label=db['diagnosis'],color=db['plot_color'])
+        sp2_diag.scatter(pl.mean(record_data[1]),pl.mean(record_data[0]),s=200,color=db['plot_color'],marker='o',alpha=.5)
         sp2_diag.axhline(y=1,color='k',linestyle='--')
         sp2_diag.set_xlim(0,20)
         sp2_diag.set_xlabel(r"$\sigma/\bar{x}$", fontsize=18)
@@ -275,8 +306,6 @@ def boxplot_diagnosis(preview=False):
             diagnosis_stat[i].append(list(itertools.chain.from_iterable(record_stat[i])))
         legend.append(db['diagnosis'][:3])
 
-    #for i in range(len(diagnosis_stat)):
-     #   diagnosis_stat_filt[i] = common.filter2d(diagnosis_stat[i], diagnosis_stat[i], axes=['x'], algos=['5per95'])
     for s in range(len(diagnosis_stat)):
         for r in range(len(diagnosis_stat[s])):
             diagnosis_stat[s][r] *= common.filter1d(diagnosis_stat[s][r], algos=['5per95'])
@@ -458,6 +487,7 @@ def plot_homeostasis_median(preview=False):
         fig_diag.suptitle('Stochastic homeostasis: medians by record of diagnosis %s' % db['diagnosis'], fontsize=20)
         
         sp1_diag.scatter(record_median[1],record_median[0],label=db['diagnosis'],color=db['plot_color'])
+        sp1_diag.scatter(pl.mean(record_median[1]),pl.mean(record_median[0]),s=200,color=db['plot_color'],marker='o',alpha=.5)
         sp1_diag.axhline(y=1,color='k',linestyle='--')
         sp1_diag.axvline(x=70,color='k',linestyle='--')
         sp1_diag.set_ylim(0,2)
@@ -467,6 +497,7 @@ def plot_homeostasis_median(preview=False):
         sp1_diag.grid()
         
         sp2_diag.scatter(record_median[2],record_median[0],label=db['diagnosis'],color=db['plot_color'])
+        sp2_diag.scatter(pl.mean(record_median[2]),pl.mean(record_median[0]),s=200,color=db['plot_color'],marker='o',alpha=.5)
         sp2_diag.axhline(y=1,color='k',linestyle='--')
         sp2_diag.set_xlim(0,20)
         sp2_diag.set_xlabel(r"$\sigma/\bar{x}$", fontsize=18)
@@ -474,8 +505,6 @@ def plot_homeostasis_median(preview=False):
 
         fig_diag.subplots_adjust(left=0.08, right=0.95, top=0.9, bottom=0.1, wspace=0.2, hspace=.3)
         fig_diag.savefig("stochastic_homeostasis_median_diagnosis_%s.png" % (db['diagnosis'],),facecolor='w',edgecolor='k',transparent=True)
-        if preview:
-            fig_diag.show()
 
         for i in range(3):
             diag_data_1 = pl.array(list(itertools.chain.from_iterable(record_data[i])))
@@ -489,7 +518,7 @@ def plot_homeostasis_median(preview=False):
     sp2_sum.legend(loc='best')
     fig_sum.savefig("stochastic_homeostasis_medians_diagnosis.png",facecolor='w',edgecolor='k',transparent=True)
     if preview:
-        fig_sum.show()
+        pl.show()
     
     pl.close()
 
@@ -611,24 +640,21 @@ def plot_metric_median_age(preview=False):
 
         def _draw_sp(sp,sp_sum,x,y,ylabel):
             a,b = theil_sen(x, y)
-            #a,b = common.approximate(x, y)
-            #common.approximate(record_data[:,0], record_data[:,1])
-            #M = max(x)
-            #m = min(x)
             _x = pl.arange(90)
             _y = a * _x + b
+            #pprint(pl.square(pl.corrcoef(x,y)))
             sp.scatter(x,y,color=db['plot_color'],alpha=.5)
-            sp.plot(_x,_y,color=db['plot_color'],lw=2)
-            #sp.axhline(y=1,color='k',linestyle='--')
-            #sp.set_ylim(0,2)
+            sp.plot(_x,_y,color=db['plot_color'],label=(r"$y=%0.3f%+0.3f*x$"%(b,a)  + '\n' + (r"$R^2=%0.3f$"%(pl.square(pl.corrcoef(x,y)[0,1]),))),lw=2)
             sp.set_xlim(0,90)
             sp.set_xlabel("Age (years)", fontsize=14)
             sp.set_ylabel(ylabel, fontsize=14)
             sp.grid()
+            sp.legend(loc='best',prop={'size':12})
             sp_sum.plot(_x,_y,color=db['plot_color'],label=db['diagnosis'])
             sp_sum.set_xlabel("Age (years)", fontsize=14)
             sp_sum.set_ylabel(ylabel, fontsize=14)
             sp_sum.grid()
+
         _draw_sp(sp1,sp1_sum,record_data[:,0],record_data[:,1],r"$\beta$")
         _draw_sp(sp2,sp2_sum,record_data[:,0],record_data[:,2],r"$\sigma$")
         _draw_sp(sp3,sp3_sum,record_data[:,0],record_data[:,3],r"$\sigma/\bar{x}$")
@@ -670,19 +696,15 @@ def plot_metric_age(preview=False):
 
         def _draw_sp(sp,sp_sum,x,y,ylabel):
             a,b = theil_sen(x, y)
-            #a,b = common.approximate(x, y)
-            #M = max(x)
-            #m = min(x)
             _x = pl.arange(90)
             _y = a * _x + b
             sp.scatter(x,y,color=db['plot_color'],alpha=.5)
-            sp.plot(_x,_y,color=db['plot_color'],lw=2)
-            #sp.axhline(y=1,color='k',linestyle='--')
-            #sp.set_ylim(0,2)
+            sp.plot(_x,_y,color=db['plot_color'],label=(r"$y=%0.3f%+0.3f*x$"%(b,a)  + '\n' + (r"$R^2=%0.3f$"%(pl.square(pl.corrcoef(x,y)[0,1]),))),lw=2)
             sp.set_xlim(0,90)
             sp.set_xlabel("Age (years)", fontsize=14)
             sp.set_ylabel(ylabel, fontsize=14)
             sp.grid()
+            sp.legend(loc='best',prop={'size':12})
 
             sp_sum.plot(_x,_y,color=db['plot_color'],label=db['diagnosis'])
             sp_sum.set_xlabel("Age (years)", fontsize=14)
@@ -695,17 +717,6 @@ def plot_metric_age(preview=False):
 
         fig.subplots_adjust(left=0.08, right=0.97, top=0.93, bottom=0.06, wspace=0.25, hspace=.2)
         fig.savefig("metric_age_%s.png" % (db['diagnosis'],),facecolor='w',edgecolor='k',transparent=True)
-        #fig.draw()
-        # if preview:
-        #     pl.show()
-
-        # for i in range(3):
-        #     diag_data_1 = pl.array(list(itertools.chain.from_iterable(record_data[i])))
-        #     diag_data[i].append(diag_data_1)
-        #     diag_median[i] = pl.median(diag_data_1)
-        
-        # sp1_sum.scatter(diag_median[1],diag_median[0],s=200,label=db['diagnosis'],color=db['plot_color'],marker='o')
-        # sp2_sum.scatter(diag_median[2],diag_median[0],s=200,label=db['diagnosis'],color=db['plot_color'],marker='o')
 
     fig_sum.subplots_adjust(left=0.08, right=0.97, top=0.93, bottom=0.06, wspace=0.25, hspace=.2)
     sp1_sum.legend(loc='best',prop={'size':12})
@@ -727,8 +738,8 @@ if __name__ == '__main__':
     # boxplot_diagnosis(preview)
     # #plot_clusters(preview)
     # plot_homeostasis_interp(preview)
-    # plot_homeostasis_median(preview)
+    plot_homeostasis_median(preview)
     # plot_homeostasis_contour(preview)
-    plot_homeostasis_contour_median(preview)
+    #plot_homeostasis_contour_median(preview)
     #plot_metric_median_age(preview)
     #plot_metric_age(preview)

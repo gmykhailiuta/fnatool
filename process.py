@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import matplotlib as mp
+mp.use('GtkAgg')
 import pylab as pl
 from wfdbtools import rdhdr, rdann
 from sys import exit
@@ -11,6 +13,7 @@ import subprocess
 import common
 import plot_results
 global config
+
 
 """
 + Summary plot for all signals
@@ -212,8 +215,8 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         results_to_csv(results, record, info)
         plot_results.plot_time(rrs, info, results, config['WINDOW'], preview=preview)
         if preview:
-            plot_results.plot_beta_std(results, preview=preview)
-            plot_results.plot_beta_cv(results, preview=preview)
+            plot_results.plot_homeostasis_record(results, preview=preview)
+            #plot_results.plot_beta_cv(results, preview=preview)
     else:
         warn("No results")
 
