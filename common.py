@@ -159,8 +159,11 @@ def signal_to_csv(record,time,hrv,info):
 def elapsed_to_abs_time(seconds, base_time=None):
     if not base_time:
         base_time = dt.datetime(1900, 01, 01, 0, 0, 0,tzinfo=None)
+    #print seconds
+    #print pl.floor(seconds)
+    #print (seconds - pl.floor(seconds))*(10**6)
     return base_time + dt.timedelta(seconds=pl.floor(seconds),\
-        microseconds=(seconds - pl.floor(seconds))*10**6)
+        microseconds=(seconds - pl.floor(seconds))*(10**6))
 
 
 def approximate(x,y):

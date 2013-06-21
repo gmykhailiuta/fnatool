@@ -7,8 +7,10 @@ from sys import exit
 import datetime as dt
 import time
 from scipy import interpolate as ipl
+from theil_sen import theil_sen
 from pprint import pprint
 from warnings import warn
+import statsmodels.api as sm
 import subprocess
 import common
 import plot_results
@@ -164,6 +166,8 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         frag_beg = frag * window * slide_rate
         frag_end = frag * window * slide_rate + window
 
+        #print time_interp[frag_beg]
+
         result['time'] = common.elapsed_to_abs_time(pl.mean((time_interp[frag_beg],time_interp[frag_end])), info['base_time'])
         result['time_beg'] = common.elapsed_to_abs_time(time_interp[frag_beg], info['base_time'])
         result['time_end'] = common.elapsed_to_abs_time(time_interp[frag_end], info['base_time'])
@@ -172,7 +176,7 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         
         #result['sec_from'] = time_interp[frag_beg]
         #result['sec_to'] = time_interp[frag_end]
-
+ 
         time_frag = pl.array(time_interp[frag_beg: frag_end])
         time_frag -= time_frag.min()
         hrv_frag = pl.array(hrv_interp[frag_beg: frag_end])
@@ -202,9 +206,7 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
 
         result['beta'] = -_a
         if frag == 50 and preview:
-            line_y = [_a*x+_b for x in freq_filt]
-            plot_results.plot_beta(freq_filt, fft_filt, line_y, result, preview=preview)
-            del line_y
+            plot_results.plot_beta(freq_filt, fft_filt, _a, _b, result, preview=preview)
 
         results.append(result)
         print "%(frag)03d/%(frag_count)03d: %(time_beg)s - %(time_end)s\t%(beta)0.2f\t%(std)d\t%(cov)0.2f%%\t%(mean)d" % dict(result.items()+{'frag_count':frag_count}.items())
@@ -213,9 +215,10 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
     if results:
         stats(results)
         results_to_csv(results, record, info)
-        plot_results.plot_time(rrs, info, results, config['WINDOW'], preview=preview)
+        plot_results.plot_homeostasis_record(results, preview=preview)
+        plot_results.plot_beta_hist(results, preview=preview)
         if preview:
-            plot_results.plot_homeostasis_record(results, preview=preview)
+            plot_results.plot_time(rrs, info, results, config['WINDOW'], preview=preview)
             #plot_results.plot_beta_cv(results, preview=preview)
     else:
         warn("No results")
@@ -267,7 +270,7 @@ def stats(results):
 if __name__ == '__main__':
     global config
     config = common.load_config()
-    batch = False
+    batch = not config['DEBUG']
     if batch:
         for diag in config['SIGNALS']:
             for record in diag['records'].split():
@@ -275,6 +278,7 @@ if __name__ == '__main__':
                     slide_rate=config['SLIDE_RATE'], preview=config['PREVIEW'])
     else:
         #records = '16483 16773 16795 17453'
-        records = 'chf201'
+        #records = 'nsr001 nsr002 nsr003 nsr004 nsr005 nsr006'
+        records = 'chf201 chf202 chf203 chf204 chf205'
         for record in records.split():
-            process_signal(record, 'ecg', "HF2", config['SLIDE_RATE'], preview=True)
+            process_signal(record, 'ecg', "CHF", config['SLIDE_RATE'], preview=config['PREVIEW'])
