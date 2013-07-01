@@ -1,55 +1,27 @@
 #!/usr/bin/env python
-import matplotlib as mp
-mp.use('GtkAgg')
+#import matplotlib as mp
+#mp.use('GtkAgg')
 import pylab as pl
-from wfdbtools import rdhdr, rdann
+from wfdbtools import rdhdr
 from sys import exit
 import datetime as dt
-import time
 from scipy import interpolate as ipl
-from theil_sen import theil_sen
 from pprint import pprint
 from warnings import warn
-import statsmodels.api as sm
 import subprocess
 import common
 import plot_results
 global config
 
 
-"""
-+ Summary plot for all signals
-  + beta_std by desease
-  + beta_cv by desease
-  + Boxed for every desease
-+ Boxed plot for signal, all signals
-+ Count stats for all signals
-+ Different interpolations (esp. spline)
-+ Sliding window
-Compare window size
-+ 2-sigma cutting signals
-+ Grid
-+ 3D interpolation
-+ Cluster analysis
-+ Optimize memory usage
-+ Config files
-Spectrogram
-Lomb FFT
-Parameters as command Parameters
-Do not use pylab (or fix case if using Gtk)
-"""
-
-
 def variability(r_times):
     """
-    Get HRV from RR times array.
-    Parameters:
-        r_times : ndarray
-    Returns:
-        time : ndarray
-            Time vector
-        rrs : ndarray
-            HRV vector
+    Get HRV from RR occurance times array.
+    In:
+        r_times : ndarray, Relative time in seconds
+    Out:
+        time : ndarray, Relative time vector in seconds
+        hrv : ndarray, HRV vector in milliseconds
     """
 
     time = pl.delete(r_times,-1)
@@ -64,9 +36,12 @@ def variability(r_times):
 
 def interpolate(x, y, order=2):
     """
-    Interpolates x/y using cubic interpolation
+    Interpolates y(x) using linear/cubic interpolation
     In:
         x, y : ndarray, Input data
+        order : int, 0 - linear interpolation, 1-5 - cubic spline interpolation.
+        Actually, linear and 1st order cubic spline gives similar results, but
+            a little bit different results
     Out:
         xnew, ynew : ndarray, Interpolated data
     """
@@ -83,18 +58,19 @@ def interpolate(x, y, order=2):
 
 
 def fft_filter(time, signal, result, window_func=pl.hanning, \
-               samp_freq=8, freq_limit = (0.0033, 0.04), preview=False):
+               samp_freq=8, freq_limit = (0.0033, 0.04)):
     """
-    Applies an Band Pass filter to signal in the frequency domain and plots
-        signals and their spectrals.
+    Applies an Band Pass filter to signal in the frequency domain and returns 
+        filterd PSD.
     In:
-        time : ndarray, relative RR times vector
+        time : ndarray, relative R occurance times vector
         signal : ndarray, HRV vector
-        result : dict, current fragment info
-        freq_limit : frequencies for band pass filter, analyzed freq range
+        result : dict, current fragment info (see process function)
+        samp_freq : int, signal sample frequency
+        freq_limit : tuple, (min, max) frequencies for band pass filter
     Out:
-        10*log10 of frequency vector
-        10*log10 of specturm
+        freq_filt_log : ndarray, frequency in logarithm scale
+        spec_filt_log : ndarray, PSD in logarithm scale
     """
 
     window = window_func(len(signal)) # window
@@ -128,6 +104,18 @@ def fft_filter(time, signal, result, window_func=pl.hanning, \
 
 def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         preview=False):
+    """
+    Reads, splits signal into windows and analyses each one.
+    In:
+        record : str, record name in WFDB format
+        annotator : str, annotator name in WFDB format
+        diagnosis : str, set diagnosis explicitly
+        slide_rate : float, window slide = slide_rate * window
+        preview : show plots while running
+    Out:
+        info : dict, record info
+        results : list of dicts, processing results
+    """
     global config
     info = rdhdr(record)
     #pprint(info)
@@ -142,10 +130,9 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         algos=config['HRV_FILTER_ALGO'])
     time_interp, hrv_interp = interpolate(time_filt, hrv_filt, config['SPLINE_ORDER'])
 
-
     if preview:
-        plot_results.plot_hrv([rrs[:,0], rrs[:,1]], [time_filt, hrv_filt], [time_interp, hrv_interp], record,\
-            preview=preview)
+        plot_results.plot_hrv([rrs[:,0], rrs[:,1]], [time_filt, hrv_filt], \
+            [time_interp, hrv_interp], record, preview=preview)
 
     del time_filt, hrv_filt
 
@@ -166,16 +153,12 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
         frag_beg = frag * window * slide_rate
         frag_end = frag * window * slide_rate + window
 
-        #print time_interp[frag_beg]
-
-        result['time'] = common.elapsed_to_abs_time(pl.mean((time_interp[frag_beg],time_interp[frag_end])), info['base_time'])
-        result['time_beg'] = common.elapsed_to_abs_time(time_interp[frag_beg], info['base_time'])
-        result['time_end'] = common.elapsed_to_abs_time(time_interp[frag_end], info['base_time'])
-        #result['time_from'] = elapsed_to_abs_time(time_interp[frag_beg], info['base_time']).strftime("%H:%M:%S.%f")
-        #result['time_to'] = elapsed_to_abs_time(time_interp[frag_end], info['base_time']).strftime("%H:%M:%S.%f")
-        
-        #result['sec_from'] = time_interp[frag_beg]
-        #result['sec_to'] = time_interp[frag_end]
+        result['time'] = common.elapsed_to_abs_time(pl.mean((\
+            time_interp[frag_beg],time_interp[frag_end])), info['base_time'])
+        result['time_beg'] = common.elapsed_to_abs_time(time_interp[frag_beg],\
+            info['base_time'])
+        result['time_end'] = common.elapsed_to_abs_time(time_interp[frag_end],\
+            info['base_time'])
  
         time_frag = pl.array(time_interp[frag_beg: frag_end])
         time_frag -= time_frag.min()
@@ -192,8 +175,7 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
                 result,\
                 window_func=getattr(pl, config['FFT_WINDOW_FUNC']),\
                 samp_freq=config['INTERP_FREQ'],\
-                freq_limit = config['FREQ_LIMIT'],\
-                preview=preview)
+                freq_limit = config['FREQ_LIMIT'])
         del time_frag, hrv_frag
 
         # Dirty hack just for case when we have constant signal in window, 
@@ -222,12 +204,19 @@ def process_signal(record, annotator, diagnosis=None, slide_rate=.5,\
             #plot_results.plot_beta_cv(results, preview=preview)
     else:
         warn("No results")
+    return info, results
 
-    return rrs, info, results
 
 def read_rrs(record, annotator):
+    """
+    Reads signal from WFDB annotation file using ann2rr tool.
+    In:
+        record : str, record name in WFDB format
+        annotator : str, annotator name in WFDB format
+    Out:
+        rrs : ndarray, RRs in milliseconds
+    """
     rrs = []
-    #proc = subprocess.Popen(['rdann','-r',record,'-a',annotator,'-p','N','-c','0'],bufsize=-1,stdout=subprocess.PIPE)
     proc = subprocess.Popen(['/usr/bin/ann2rr','-r',record,'-a',annotator,'-p','N','-P','N','-V','s6','-i','s6','-c'],bufsize=-1,stdout=subprocess.PIPE)
     for line in iter(proc.stdout.readline,''):
         rr = line.split()
@@ -238,6 +227,13 @@ def read_rrs(record, annotator):
 
 
 def results_to_csv(results,record,info):
+    """
+    Write processing results to CSV.
+    In:
+        results : list of dicts, processing results
+        record : str, record name in WFDB format
+        info : dict, record info
+    """
     outfile = open("results_%s.csv" % (record,), "w")
     outfile.write("%s,%s,%s,%s\n" % (record, info['gender'], info['age'], info['diagnosis']))
     for r in results:
@@ -249,6 +245,11 @@ def results_to_csv(results,record,info):
 
 
 def stats(results):
+    """
+    Compute and print statistics for record to stdout.
+    In:
+        results : list of dicts, processing results
+    """
     means = {'beta':0.0,'std':0.0, 'cov':0.0, 'mean':0.0}
     mins = means.copy()
     maxs = means.copy()

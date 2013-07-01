@@ -5,13 +5,28 @@ from pprint import pprint
 from warnings import warn
 import datetime as dt
 
+
 def load_config(file_name="wfdb.conf"):
+    """
+    Loads config file.
+    In:
+        file_name : str, config file name
+    Out:
+        config : dict, config file contents
+    """
     config = {}
     execfile(file_name, config)
     return config
 
 
 def read_signal(file_name=None):
+    """
+    Read processing results signal.
+    In:
+        file_name : str, processing results signal file name, *.csv
+    Out:
+        result : dict, file contents
+    """
     beta, std, cov, mean = [], [], [], []
     result = {'record':False}
     try:
@@ -49,6 +64,16 @@ def read_signal(file_name=None):
 
 
 def filter2d(x, y, axes=['y'], algos=['2sigma']):
+    """
+    Perform 2D data filtration by selected exes.
+    In:
+        x : ndarray, X vector
+        y : ndarray, Y vector
+        axes : list, axes names which are used to choose filtered values. x, y or any combination
+    Out:
+        xnew : ndarray, filtered X
+        ynew : ndarray, filtered Y
+    """
     xnew = pl.array(x, dtype='float')
     ynew = pl.array(y, dtype='float')
     mask_x = pl.ones(len(x), dtype='bool')
@@ -70,6 +95,16 @@ def filter2d(x, y, axes=['y'], algos=['2sigma']):
     return xnew, ynew
 
 def filter1d(x, mask_only=True, algos=['2sigma']):
+    """
+    Filter vector with selected algorithms.
+    In:
+        x : ndarray, input vector
+        mask_only : bool, do not touch input vector, just find "bad" values
+        algos : list of str, algos list to apply to input vector. The sequence is the same as in the list
+    Out:        
+        xnew : ndarray, filtered input vector (returned only if mask_only=False)
+        mask : ndarray of bool, vector of the same length as x, where "0" represents masked values
+    """
     xnew = pl.array(x, dtype='float')
     mask = pl.ones(len(x), dtype='bool')
     for algo in algos:
@@ -148,6 +183,14 @@ def filter1d(x, mask_only=True, algos=['2sigma']):
 
 
 def signal_to_csv(record,time,hrv,info):
+    """
+    Writes HRV signal to CSV.
+    In:
+        record : str, record name in WFDB format
+        time : ndarray, R occurance time vector
+        hrv : ndarray, HRV signal
+        info : dict, record info
+    """
     outfile = open("%s.csv" % (record,), "w")
     for i in range(len(hrv)):
         t_full = info['base_time'] + dt.timedelta(seconds=time[i])
@@ -157,18 +200,23 @@ def signal_to_csv(record,time,hrv,info):
 
 
 def elapsed_to_abs_time(seconds, base_time=None):
+    """
+    Convert relative (elapsed) time in seconds to astronomical datetime.
+    In:
+        seconds : float, elapsed seconds
+        base_time : datetime, recording start time (if available)
+    Out:        
+        datetime
+    """
     if not base_time:
         base_time = dt.datetime(1900, 01, 01, 0, 0, 0,tzinfo=None)
-    #print seconds
-    #print pl.floor(seconds)
-    #print (seconds - pl.floor(seconds))*(10**6)
     return base_time + dt.timedelta(seconds=pl.floor(seconds),\
         microseconds=(seconds - pl.floor(seconds))*(10**6))
 
 
 def approximate(x,y):
     """
-    Linear approximation of y=f(x)
+    Linear approximation of y=f(x) using least square estimator.
     In:
         x : ndarray
         y : ndarray
