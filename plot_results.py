@@ -41,11 +41,11 @@ def plot_hrv(hrv, hrv_filt, hrv_interp, record, preview=False):
     sp_orig = pl.subplot(311)
     pl.title("Original signal")
     pl.ylabel(r"$RR_i$ (ms)") 
-    pl.plot(hrv[0], hrv[1], color='b', marker='.', linestyle='--', alpha=.5)
+    pl.plot(hrv[0], hrv[1], color='k', marker='.', linestyle='--', alpha=.5)
     sp_filt = pl.subplot(312,sharex=sp_orig,sharey=sp_orig)
     pl.title("Filtered signal")
     pl.ylabel("$RR_i$ (ms)")
-    pl.plot(hrv_filt[0], hrv_filt[1], color='b', marker='.', linestyle='--', alpha=.5)
+    pl.plot(hrv_filt[0], hrv_filt[1], color='k', marker='.', linestyle='--', alpha=.5)
     sp_filt = pl.subplot(313,sharex=sp_orig,sharey=sp_orig)
     pl.title("Interpolated signal")
     pl.ylabel(r"$RR_j$ (ms)") 
@@ -138,7 +138,8 @@ def plot_homeostasis_record(results, preview=False):
     fig, (sp1, sp2) = pl.subplots(1,2,sharey=True,sharex=False,figsize=(12, 6),facecolor='white',num="stochastic_homeostasis_record")
     fig.suptitle('Stochastic homeostasis for record %(record)s' % results[0], fontsize=20) 
     sp1.scatter(std,beta,color='b')
-    sp1.scatter(pl.mean(std),pl.mean(beta),s=200,color='b',marker='o',alpha=.5)
+    sp1.scatter(pl.mean(std),pl.mean(beta),s=400,color='r',marker='o',alpha=.7)
+    sp1.scatter(pl.mean(std),pl.mean(beta), marker='x', s=200, c='k',lw=2)
     sp1.axhline(y=1,color='k',linestyle='--')
     sp1.axvline(x=70,color='k',linestyle='--')
     sp1.set_ylim(0,2)
@@ -147,7 +148,8 @@ def plot_homeostasis_record(results, preview=False):
     sp1.set_ylabel(r"$\beta$", fontsize=20)
     sp1.grid()
     sp2.scatter(cov,beta,color='b')
-    sp2.scatter(pl.mean(cov),pl.mean(beta),s=200,color='b',marker='o',alpha=.5)
+    sp2.scatter(pl.mean(cov),pl.mean(beta),s=400,color='r',marker='o',alpha=.7)
+    sp2.scatter(pl.mean(cov),pl.mean(beta), marker='x', s=200, c='k',lw=2)
     sp2.axhline(y=1,color='k',linestyle='--')
     sp2.set_xlim(0,20)
     sp2.set_xlabel(r"$\sigma/\bar{x}$", fontsize=20)
@@ -171,6 +173,9 @@ def plot_beta_hist(results, preview=False):
     #fig.savefig("homeostasis_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
     #if preview:
     #    pl.show()
+    fig.savefig("hist_%(record)s.png" % results[0],facecolor='w',edgecolor='k',transparent=True)
+    if preview:
+        pl.show()
     pl.show()
     pl.close()
 
@@ -180,7 +185,7 @@ def plot_beta(freq, fft, a, b, result, preview=False):
     y = a * freq + b
 
     pl.figure(figsize=(6, 6),facecolor='white')
-    pl.plot(freq,fft,color='b',label="PSD")
+    pl.plot(freq,fft,color='k',label="PSD")
     pl.plot(freq,y,color='r',ls='--',lw=2,label=(r"$y=%0.3f%+0.3f*x$"%(b,a)  + '\n' + (r"$R^2=%0.3f$"%(pl.square(pl.corrcoef(freq,fft)[0,1]),))))
     # rx = pl.linspace(min(freq),max(freq),100)
     # ra, rb = theil_sen(freq,fft)
@@ -234,8 +239,8 @@ def plot_homeostasis(preview=False):
         
         sp1_diag.scatter(record_data[1],record_data[0],label=db['diagnosis'],color=db['plot_color'],alpha=.5,marker='x')
         #sp1_diag.scatter(pl.mean(record_data[1]),pl.mean(record_data[0]),s=200,color=db['plot_color'],marker='o')
-        sp1_diag.scatter(pl.mean(record_data[1]),pl.mean(record_data[0]), marker='o', s=1500, c='w', alpha=0.5, lw=2)
-        sp1_diag.scatter(pl.mean(record_data[1]),pl.mean(record_data[0]), marker='x', s=500, c='k')
+        sp1_diag.scatter(pl.mean(record_data[1]),pl.mean(record_data[0]), marker='o', s=100, c='w', alpha=0.5, lw=2)
+        sp1_diag.scatter(pl.mean(record_data[1]),pl.mean(record_data[0]), marker='x', s=500, c='k', lw=2)
         sp1_diag.axhline(y=1,color='k',linestyle='--')
         sp1_diag.axvline(x=70,color='k',linestyle='--')
         sp1_diag.set_ylim(0,2)
@@ -246,8 +251,8 @@ def plot_homeostasis(preview=False):
         
         sp2_diag.scatter(record_data[2],record_data[0],label=db['diagnosis'],color=db['plot_color'],alpha=.5,marker='x')
         #sp2_diag.scatter(pl.mean(record_data[2]),pl.mean(record_data[0]),s=200,color=db['plot_color'],marker='o')
-        sp2_diag.scatter(pl.mean(record_data[2]),pl.mean(record_data[0]), marker='o', s=1500, c='w', alpha=0.5, lw=2)
-        sp2_diag.scatter(pl.mean(record_data[2]),pl.mean(record_data[0]), marker='x', s=500, c='k')
+        sp2_diag.scatter(pl.mean(record_data[2]),pl.mean(record_data[0]), marker='o', s=100, c='w', alpha=0.5, lw=2)
+        sp2_diag.scatter(pl.mean(record_data[2]),pl.mean(record_data[0]), marker='x', s=500, c='k', lw=2)
         sp2_diag.axhline(y=1,color='k',linestyle='--')
         sp2_diag.set_xlim(0,20)
         sp2_diag.set_xlabel(r"$\sigma/\bar{x}$", fontsize=20)
@@ -531,7 +536,7 @@ def plot_homeostasis_median(preview=False):
     pl.close()
 
 
-def plot_homeostasis_contour(diags_filter=('NM2','CHF'),preview=False):
+def plot_homeostasis_contour(diags_filter=('HYP','CHF'),preview=False):
     global config
     fig, (sp1, sp2) = pl.subplots(1,2,sharey=True,sharex=False,figsize=(24, 12),facecolor='white',num="stochastic_homeostasis_contours_%s" % ('_'.join(diags_filter),))
     fig.suptitle('Stochastic homeostasis: contour of diagnoses %s' % (','.join(diags_filter),), fontsize=36)
@@ -748,14 +753,14 @@ if __name__ == '__main__':
     preview = config['PREVIEW']
     if config['DEBUG']:
         #plot_homeostasis(preview)
-        #boxplot_diagnosis(preview)
+        boxplot_diagnosis(preview)
         # #plot_clusters(preview)
         #plot_homeostasis_interp(preview)
         #plot_homeostasis_median(preview)
         #plot_homeostasis_contour(preview=preview)
         #plot_homeostasis_contour_median(preview=preview)
         #plot_metric_median_age(preview)
-        plot_metric_age(preview)
+        #plot_metric_age(preview)
     else:
         plot_homeostasis(preview)
         boxplot_diagnosis(preview)
